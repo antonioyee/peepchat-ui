@@ -67381,6 +67381,3356 @@ define("ember-cli-app-version/templates/app-version", ["exports"], function (exp
     };
   })());
 });
+define('ember-cp-validations/index', ['exports', 'ember-cp-validations/validations/factory', 'ember-cp-validations/validations/validator'], function (exports, _emberCpValidationsValidationsFactory, _emberCpValidationsValidationsValidator) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  /**
+   * ## Installation
+   * ```shell
+   * ember install ember-cp-validations
+   * ```
+   *
+   * ## Changelog
+   * Changelog can be found [here](https://github.com/offirgolan/ember-cp-validations/blob/master/CHANGELOG.md)
+   *
+   * ## Live Demo
+   * A live demo can be found [here](http://offirgolan.github.io/ember-cp-validations/)
+   *
+   * ## Looking for help?
+   * If it is a bug [please open an issue on GitHub](http://github.com/offirgolan/ember-cp-validations/issues).
+   *
+   * @module Home
+   */
+
+  /**
+   * <h2 id="models">Models</h2>
+   *
+   * The first thing we need to do it build our validation rules. This will then generate a Mixin that you will be able to incorporate into your model or object.
+   *
+   * ```javascript
+   * // models/user.js
+   *
+   * import Ember from 'ember';
+   * import DS from 'ember-data';
+   * import { validator, buildValidations } from 'ember-cp-validations';
+   *
+   * const Validations = buildValidations({
+   *   username: validator('presence', true),
+   *   password: [
+   *     validator('presence', true),
+   *     validator('length', {
+   *       min: 4,
+   *       max: 8
+   *     })
+   *   ],
+   *   email: [
+   *     validator('presence', true),
+   *     validator('format', { type: 'email' })
+   *   ],
+   *   emailConfirmation: [
+   *     validator('presence', true),
+   *     validator('confirmation', {
+   *       on: 'email',
+   *       message: '{description} do not match',
+   *       description: 'Email addresses'
+   *     })
+   *   ]
+   * });
+   * ```
+   *
+   * Once our rules are created and our Mixin is generated, all we have to do is add it to our model.
+   *
+   * ```javascript
+   * // models/user.js
+   *
+   * export default DS.Model.extend(Validations, {
+   *   'username': attr('string'),
+   *   'password': attr('string'),
+   *   'email': attr('string')
+   * });
+   * ```
+   *
+   * <h2 id="objects">Objects</h2>
+   *
+   * You can also use the generated `Validations` mixin on any `Ember.Object` or child
+   * of `Ember.Object`, like `Ember.Component`. For example:
+   *
+   * ```javascript
+   * // components/x-foo.js
+   *
+   * import Ember from 'ember';
+   * import { validator, buildValidations } from 'ember-cp-validations';
+   *
+   * const Validations = buildValidations({
+   *   bar: validator('presence', true)
+   * });
+   *
+   * export default Ember.Component.extend(Validations, {
+   *   bar: null
+   * });
+   * ```
+   *
+   * To lookup validators, container access is required which can cause an issue with `Ember.Object` creation if the object is statically imported. The current fix for this is as follows.
+   *
+   * ```javascript
+   * // models/user.js
+   *
+   * export default Ember.Object.extend(Validations, {
+   *   username: null
+   * });
+   * ```
+   *
+   * **Ember < 2.3.0-beta.1**
+   *
+   * ```javascript
+   * // routes/index.js
+   *
+   * import User from '../models/user';
+   *
+   * export default Ember.Route.extend({
+   *   model() {
+   *     var container = this.get('container');
+   *     return User.create({ username: 'John', container })
+   *   }
+   * });
+   * ```
+   *
+   * **Ember >= 2.3.0-beta.2**
+   *
+   * ```javascript
+   * // routes/index.js
+   *
+   * import User from '../models/user';
+   *
+   * export default Ember.Route.extend({
+   *   model() {
+   *     return User.create(
+   *      getOwner(this).ownerInjection(),
+   *      { username: 'John' }
+   *     );
+   *   }
+   * });
+   * ```
+   *
+   * @module Home
+   * @submodule Basic Usage
+   */
+
+  /**
+   * <h3 id="defaultOptions">Default Options</h3>
+   *
+   * Default options can be specified over a set of validations for a given attribute. Local properties will always take precedence.
+   *
+   * Instead of doing the following:
+   *
+   * ```javascript
+   * const Validations = buildValidations({
+   *   username: [
+   *     validator('presence', {
+   *       presence: true,
+   *       description: 'Username'
+   *     }),
+   *     validator('length', {
+   *       min: 1,
+   *       description: 'Username'
+   *     }),
+   *     validator('no-whitespace-around', {
+   *       description: 'A username'
+   *     })
+   *   ]
+   * });
+   * ```
+   *
+   * We can declare default options:
+   *
+   * ```javascript
+   * const Validations = buildValidations({
+   *   username: {
+   *     description: 'Username'
+   *     validators: [
+   *       validator('presence', true),
+   *       validator('length', {
+   *         min: 1
+   *       }),
+   *       validator('no-whitespace-around', {
+   *         description: 'A username'
+   *       })
+   *     ]
+   *   },
+   * });
+   * ```
+   *
+   * In the above example, all the validators for username will have a description of `Username` except that of the `no-whitespace-around` validator which will be `A username`.
+   *
+   * <h3 id="globalOptions">Global Options</h3>
+   *
+   * If you have  specific options you want to propagate throught all your validation rules, you can do so by passing in a global options object.
+   * This is ideal for when you have a dependent key that each validator requires such as the current locale from your i18n implementation, or
+   * you want easily toggle your validations on/off.
+   *
+   * ```javascript
+   * const Validations = buildValidations(validationRules, globalOptions);
+   * ```
+   *
+   * ```javascript
+   * import Ember from 'ember';
+   * import { validator, buildValidations } from 'ember-cp-validations';
+   *
+   * const Validations = buildValidations({
+   *   firstName: {
+   *     description: 'First Name'
+   *     validators: [
+   *       validator('presence', {
+   *         presence: true,
+   *         dependentKeys: ['foo', 'bar']
+   *       })
+   *      ]
+   *    },
+   *   lastName: validator('presence', true)
+   * }, {
+   *   description: 'This field'
+   *   dependentKeys: ['i18n.locale', 'disableValidations'],
+   *   disabled() {
+   *     return this.get('model.disableValidations');
+   *   }
+   * });
+   * ```
+   *
+   * Just like in the default options, locale validator options will always take precedence over default options and default options will always take precedence
+   * over global options. This allows you to declare global rules while having the ability to override them in lower levels.
+   *
+   * This rule does not apply to `dependentKeys`, instead they all are merged. In the example above, __firstName__'s dependentKeys will be
+   * `['i18n.locale', 'disableValidations', 'foo', 'bar']`
+   *
+   * <h3 id="optionsAsFunctions">Options as Functions</h3>
+   *
+   * All options can be functions which are processed lazily before validate is called. These functions have the context of the validator that is being executed,
+   * giving you access to all its properties such as `options`, `model`, `attribute`, etc.
+   *
+   * Please note that the `message` option of a validator has its [own signature](http://offirgolan.github.io/ember-cp-validations/docs/modules/Validators.html#message).
+   *
+   * ```javascript
+   * const Validations = buildValidations({
+   *   dob: validator('date', {
+   *     description: 'Date of Birth',
+   *     format() {
+   *       return this.get('model.meta.date.format');
+   *     },
+   *     before() {
+   *       return moment();
+   *     },
+   *     after() {
+   *       return moment().subtract(120, 'years');
+   *     }
+   *   })
+   * });
+   * ```
+   *
+   * <h3 id="nestedKeys">Nested Keys</h3>
+   *
+   * When declaring object validations (not including Ember Data models), it is possible to validate child objects from the parent object.
+   *
+   * ```javascript
+   * import Ember from 'ember';
+   * import { validator, buildValidations } from 'ember-cp-validations';
+   *
+   * const Validations = buildValidations({
+   *   'acceptTerms': validator('inclusion', { in: [ true ] }),
+   *   'user.firstName': validator('presence', true),
+   *   'user.lasName': validator('presence', true),
+   *   'user.account.number': validator('number')
+   * });
+   *
+   * export default Ember.Component.extend(Validations, {
+   *   acceptTerms: false,
+   *   user:  {
+   *     firstName: 'John',
+   *     lastName: 'Doe' ,
+   *     account: {
+   *       number: 123456,
+   *     }
+   *   },
+   *   isFormValid: Ember.computed.alias('validations.isValid'),
+   * });
+   * ```
+   *
+   * @module Home
+   * @submodule Advanced Usage
+   */
+
+  /**
+   * ## [__Ember-Intl__](https://github.com/jasonmit/ember-intl-cp-validations)
+   *
+   *  ```bash
+   *  ember install ember-intl-cp-validations
+   *  ```
+   *
+   * ## [__Ember-I18n__](https://github.com/jasonmit/ember-i18n-cp-validations)
+   *
+   * ```bash
+   *  ember install ember-i18n-cp-validations
+   * ```
+   *
+   * @module Home
+   * @submodule I18n Solutions
+   */
+
+  var buildValidations = _emberCpValidationsValidationsFactory['default'];
+  exports.buildValidations = buildValidations;
+
+  var validator = _emberCpValidationsValidationsValidator['default'];
+
+  exports.validator = validator;
+  exports['default'] = {
+    buildValidations: buildValidations,
+    validator: validator
+  };
+});
+define('ember-cp-validations/utils/assign', ['exports', 'ember'], function (exports, _ember) {
+  'use strict';
+
+  exports['default'] = assign;
+
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  /**
+   * Assigns a value to an object via the given path while creating new objects if
+   * the pathing requires it. If the given path is `foo.bar`, it will create a new object (obj.foo)
+   * and assign value to obj.foo.bar. If the given object is an Ember.Object, it will create new Ember.Objects.
+   */
+
+  var get = _ember['default'].get;
+  var set = _ember['default'].set;
+  var isNone = _ember['default'].isNone;
+  var defineProperty = _ember['default'].defineProperty;
+
+  function assign(obj, path, value) {
+    var useEmberObject = arguments.length <= 3 || arguments[3] === undefined ? false : arguments[3];
+    var delimiter = arguments.length <= 4 || arguments[4] === undefined ? '.' : arguments[4];
+
+    var keyPath = path.split(delimiter);
+    var lastKeyIndex = keyPath.length - 1;
+    var currObj = obj;
+
+    // Iterate over each key in the path (minus the last one which is the property to be assigned)
+    for (var i = 0; i < lastKeyIndex; ++i) {
+      var key = keyPath[i];
+
+      // Create a new object if it doesnt exist
+      if (isNone(get(currObj, key))) {
+        set(currObj, key, useEmberObject ? _ember['default'].Object.create() : {});
+      }
+      currObj = get(currObj, key);
+    }
+
+    if (value instanceof _ember['default'].ComputedProperty) {
+      defineProperty(currObj, keyPath[lastKeyIndex], value);
+    } else {
+      set(currObj, keyPath[lastKeyIndex], value);
+    }
+  }
+});
+define('ember-cp-validations/utils/cycle-breaker', ['exports', 'ember-cp-validations/utils/meta-data'], function (exports, _emberCpValidationsUtilsMetaData) {
+  'use strict';
+
+  exports['default'] = cycleBreaker;
+
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  /**
+   * Use Ember Meta to break cycles in the CP chains. Lets say we have a User model with a `friends` property that is a hasMany
+   * relationship. If we have a user John and he has a friend Jane, that creates a two-way relationship. John is Jane's friends and vise
+   * versa. If we were to go down the CP chain and get validations for John's friends, it would go to Jane, then to Jane's friends, which
+   * would point back to John. This method tracks which models have been already visited and breaks the cycle.
+   */
+
+  function cycleBreaker(fn, value) {
+    var key = _emberCpValidationsUtilsMetaData['default'].symbol('cycle');
+
+    return function () {
+      if (_emberCpValidationsUtilsMetaData['default'].getData(this, key)) {
+        return value;
+      }
+      _emberCpValidationsUtilsMetaData['default'].setData(this, key, true);
+      try {
+        return fn.apply(this, arguments);
+      } finally {
+        _emberCpValidationsUtilsMetaData['default'].setData(this, key, false);
+      }
+    };
+  }
+});
+define("ember-cp-validations/utils/flatten", ["exports"], function (exports) {
+  "use strict";
+
+  exports["default"] = flatten;
+
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+  function flatten() {
+    var array = arguments.length <= 0 || arguments[0] === undefined ? [] : arguments[0];
+
+    var result = [];
+
+    for (var i = 0, l = array.length; i < l; i++) {
+      var item = array[i];
+
+      if (Array.isArray(item)) {
+        result = result.concat(flatten(item));
+      } else {
+        result.push(item);
+      }
+    }
+
+    return result;
+  }
+});
+define('ember-cp-validations/utils/meta-data', ['exports', 'ember'], function (exports, _ember) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var id = 0;
+  var dataKey = symbol('data');
+
+  function symbol(key) {
+    return '_' + key + '_' + new Date().getTime() + '_' + id++;
+  }
+
+  function getData(obj, s) {
+    var m = _ember['default'].meta(obj);
+    var data = m[dataKey];
+
+    if (data) {
+      return data[s];
+    }
+  }
+
+  function setData(obj, s, value) {
+    var m = _ember['default'].meta(obj);
+    var data = m[dataKey] = m[dataKey] || {};
+
+    data[s] = value;
+  }
+
+  exports['default'] = { symbol: symbol, getData: getData, setData: setData };
+});
+define('ember-cp-validations/utils/utils', ['exports'], function (exports) {
+  'use strict';
+
+  exports.hasEmberData = hasEmberData;
+
+  function hasEmberData() {
+    return typeof self.DS !== 'undefined';
+  }
+});
+define('ember-cp-validations/validations/error', ['exports', 'ember'], function (exports, _ember) {
+  'use strict';
+
+  /**
+   * @module Validations
+   * @class Error
+   */
+
+  exports['default'] = _ember['default'].Object.extend({
+
+    /**
+     * The attribute that the error belongs to
+     * @property attribute
+     * @type {String}
+     */
+    attribute: null,
+
+    /**
+     * The error message
+     * @property message
+     * @type {String}
+     */
+    message: null
+  });
+});
+define('ember-cp-validations/validations/factory', ['exports', 'ember', 'ember-getowner-polyfill', 'ember-cp-validations/utils/flatten', 'ember-cp-validations/utils/assign', 'ember-cp-validations/validations/result', 'ember-cp-validations/validations/result-collection', 'ember-cp-validations/validators/base', 'ember-cp-validations/utils/cycle-breaker'], function (exports, _ember, _emberGetownerPolyfill, _emberCpValidationsUtilsFlatten, _emberCpValidationsUtilsAssign, _emberCpValidationsValidationsResult, _emberCpValidationsValidationsResultCollection, _emberCpValidationsValidatorsBase, _emberCpValidationsUtilsCycleBreaker) {
+  'use strict';
+
+  exports['default'] = buildValidations;
+
+  function _toConsumableArray(arr) {
+    if (Array.isArray(arr)) {
+      for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) arr2[i] = arr[i];return arr2;
+    } else {
+      return Array.from(arr);
+    }
+  }
+
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  var get = _ember['default'].get;
+  var set = _ember['default'].set;
+  var run = _ember['default'].run;
+  var RSVP = _ember['default'].RSVP;
+  var isNone = _ember['default'].isNone;
+  var guidFor = _ember['default'].guidFor;
+  var isEmpty = _ember['default'].isEmpty;
+  var isArray = _ember['default'].isArray;
+  var computed = _ember['default'].computed;
+  var makeArray = _ember['default'].makeArray;
+  var canInvoke = _ember['default'].canInvoke;
+  var getWithDefault = _ember['default'].getWithDefault;
+  var emberArray = _ember['default'].A;
+
+  var merge = _ember['default'].assign || _ember['default'].merge;
+
+  var Promise = RSVP.Promise;
+  var and = computed.and;
+  var or = computed.or;
+  var not = computed.not;
+
+  /**
+   * ## Running Manual Validations
+   *
+   * Although validations are lazily computed, there are times where we might want to force all or
+   * specific validations to happen. For this reason we have exposed two methods:
+   * - {{#crossLink "Factory/validateSync:method"}}{{/crossLink}}: Should only be used if all validations are synchronous. It will throw an error if any of the validations are asynchronous
+   * - {{#crossLink "Factory/validate:method"}}{{/crossLink}}: Will always return a promise and should be used if asynchronous validations are present
+   *
+   * ## Inspecting Validations
+   *
+   * All validations can be accessed via the `validations` object created on your model/object.
+   * Each attribute also has its own validation which has the same properties.
+   * An attribute validation can be accessed via `validations.attrs.<ATTRIBUTE>` which will return a {{#crossLink "ResultCollection"}}{{/crossLink}}.
+   *
+   * ### Global Validations
+   *
+   * Global validations exist on the `validations` object that resides on the object that is being validated.
+   * To see all possible properties, please checkout the docs for {{#crossLink "ResultCollection"}}{{/crossLink}}.
+   *
+   * ```js
+   * model.get('validations.isValid');
+   * model.get('validations.errors');
+   * model.get('validations.messages');
+   * // etc...
+   * ```
+   *
+   * ### Attribute Validations
+   *
+   * The `validations` object also contains an `attrs` object which holds a {{#crossLink "ResultCollection"}}{{/crossLink}}
+   * for each attribute specified in your validation rules.
+   *
+   * ```js
+   * model.get('validations.attrs.username.isValid');
+   * model.get('validations.attrs.password.errors');
+   * model.get('validations.attrs.email.messages');
+   * // etc...
+   * ```
+   *
+   * @module Validations
+   * @main Validations
+   * @class Factory
+   */
+
+  /**
+   * Top level method that will ultimately return a mixin with all CP validations
+   * @method  buildValidations
+   * @param  {Object} validations  Validation rules
+   * @return {Ember.Mixin}
+   */
+  function buildValidations() {
+    var validations = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+    var globalOptions = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+
+    normalizeOptions(validations, globalOptions);
+
+    var Validations = undefined;
+
+    return _ember['default'].Mixin.create({
+      _validationsClass: computed(function () {
+        if (!Validations) {
+          Validations = createValidationsClass(this._super(), validations);
+        }
+        return Validations;
+      }).readOnly(),
+      validations: computed(function () {
+        return this.get('_validationsClass').create({
+          model: this
+        });
+      }).readOnly(),
+      validate: function validate() {
+        var _get;
+
+        return (_get = get(this, 'validations')).validate.apply(_get, arguments);
+      },
+      validateSync: function validateSync() {
+        var _get2;
+
+        return (_get2 = get(this, 'validations')).validateSync.apply(_get2, arguments);
+      },
+      destroy: function destroy() {
+        this._super.apply(this, arguments);
+        get(this, 'validations').destroy();
+      }
+    });
+  }
+
+  /**
+   * Validation rules can be created with default and global options
+   * {
+   *   description: 'Username',
+   *   validators: [...]
+   * }
+   * This method generate the default options pojo, applies it to each validation rule, and flattens the object
+   * @method normalizeOptions
+   * @private
+   * @param  {Object} validations
+   * @return
+   */
+  function normalizeOptions() {
+    var validations = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+    var globalOptions = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+
+    var validatableAttrs = Object.keys(validations);
+
+    validatableAttrs.forEach(function (attribute) {
+      var rules = validations[attribute];
+
+      if (rules && typeof rules === 'object' && isArray(rules.validators)) {
+        (function () {
+          var options = Object.keys(rules).reduce(function (o, k) {
+            if (k !== 'validators') {
+              o[k] = rules[k];
+            }
+            return o;
+          }, {});
+
+          var validators = rules.validators;
+
+          validators.forEach(function (v) {
+            v.defaultOptions = options;
+          });
+          validations[attribute] = validators;
+        })();
+      }
+      validations[attribute] = makeArray(validations[attribute]);
+      validations[attribute].forEach(function (v) {
+        v.globalOptions = globalOptions;
+      });
+    });
+  }
+
+  /**
+   * Creates the validations class that will become `model.validations`.
+   *   - Setup parent validation inheritance
+   *   - Normalize nested keys (i.e. 'details.dob') into objects (i.e { details: { dob: validator() }})
+   *   - Merge normalized validations with parent
+   *   - Create `attrs` object with CPs
+   *   - Create global CPs (i.e. 'isValid', 'messages', etc...)
+   *
+   * @method createValidationsClass
+   * @private
+   * @param  {Object} inheritedValidationsClass
+   * @param  {Object} validations
+   * @return {Ember.Object}
+   */
+  function createValidationsClass(inheritedValidationsClass) {
+    var validations = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+
+    var validationRules = {};
+    var validatableAttributes = Object.keys(validations);
+
+    // Setup validation inheritance
+    if (inheritedValidationsClass) {
+      var inheritedValidations = inheritedValidationsClass.create();
+
+      validationRules = merge(validationRules, inheritedValidations.get('_validationRules'));
+      validatableAttributes = emberArray(inheritedValidations.get('validatableAttributes').concat(validatableAttributes)).uniq();
+    }
+
+    // Normalize nested keys into actual objects and merge them with parent object
+    Object.keys(validations).reduce(function (obj, key) {
+      (0, _emberCpValidationsUtilsAssign['default'])(obj, key, validations[key]);
+      return obj;
+    }, validationRules);
+
+    // Create the CPs that will be a part of the `attrs` object
+    var attrCPs = validatableAttributes.reduce(function (obj, attribute) {
+      (0, _emberCpValidationsUtilsAssign['default'])(obj, attribute, createCPValidationFor(attribute, get(validationRules, attribute)), true);
+      return obj;
+    }, {});
+
+    // Create the mixin that holds all the top level validation props (isValid, messages, etc)
+    var TopLevelProps = createTopLevelPropsMixin(validatableAttributes);
+
+    // Create the `attrs` class which will add the current model reference once instantiated
+    var Attrs = _ember['default'].Object.extend(attrCPs, {
+      init: function init() {
+        var _this = this;
+
+        this._super.apply(this, arguments);
+        var model = this.get('_model');
+
+        validatableAttributes.forEach(function (attribute) {
+          // Add a reference to the model in the deepest object
+          var path = attribute.split('.');
+          var lastObject = get(_this, path.slice(0, path.length - 1).join('.'));
+
+          if (isNone(get(lastObject, '_model'))) {
+            set(lastObject, '_model', model);
+          }
+        });
+      },
+
+      destroy: function destroy() {
+        var _this2 = this;
+
+        this._super.apply(this, arguments);
+        validatableAttributes.forEach(function (attribute) {
+          // Remove model reference from nested objects
+          var path = attribute.split('.');
+          var lastObject = get(_this2, path.slice(0, path.length - 1).join('.'));
+
+          if (!isNone(get(lastObject, '_model'))) {
+            set(lastObject, '_model', null);
+          }
+        });
+      }
+    });
+
+    // Create `validations` class
+    return _ember['default'].Object.extend(TopLevelProps, {
+      model: null,
+      attrs: null,
+      isValidations: true,
+
+      validatableAttributes: computed(function () {
+        return validatableAttributes;
+      }).readOnly(),
+
+      // Caches
+      _validators: null,
+      _debouncedValidations: null,
+
+      // Private
+      _validationRules: computed(function () {
+        return validationRules;
+      }).readOnly(),
+
+      validate: validate,
+      validateSync: validateSync,
+
+      init: function init() {
+        this._super.apply(this, arguments);
+        this.setProperties({
+          attrs: Attrs.create({
+            _model: this.get('model')
+          }),
+          _validators: {},
+          _debouncedValidations: {}
+        });
+      },
+
+      destroy: function destroy() {
+        this._super.apply(this, arguments);
+        var validatableAttrs = get(this, 'validatableAttributes');
+        var debouncedValidations = get(this, '_debouncedValidations');
+
+        // Initiate attrs destroy to cleanup any remaining model references
+        this.get('attrs').destroy();
+
+        // Cancel all debounced timers
+        validatableAttrs.forEach(function (attr) {
+          var attrCache = get(debouncedValidations, attr);
+
+          if (!isNone(attrCache)) {
+            // Itterate over each attribute and cancel all of its debounced validations
+            Object.keys(attrCache).forEach(function (v) {
+              return run.cancel(attrCache[v]);
+            });
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * CP generator for the given attribute
+   * @method createCPValidationFor
+   * @private
+   * @param  {String} attribute
+   * @param  {Array / Object} validations
+   * @return {Ember.computed} A computed property which is a ValidationResultCollection
+   */
+  function createCPValidationFor(attribute, validations) {
+    var dependentKeys = getCPDependentKeysFor(attribute, validations);
+
+    return computed.apply(undefined, _toConsumableArray(dependentKeys).concat([(0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      var model = get(this, '_model');
+      var validators = getValidatorsFor(attribute, model);
+
+      var validationResults = validators.map(function (validator) {
+        var options = validator.processOptions();
+        var debounce = getWithDefault(options, 'debounce', 0);
+        var disabled = getWithDefault(options, 'disabled', false);
+        var value = undefined;
+
+        if (disabled) {
+          value = true;
+        } else if (debounce > 0) {
+          (function () {
+            var cache = getDebouncedValidationsCacheFor(attribute, model);
+
+            // Return a promise and pass the resolve method to the debounce handler
+            value = new Promise(function (resolve) {
+              cache[guidFor(validator)] = run.debounce(validator, debouncedValidate, validator, model, attribute, resolve, debounce, false);
+            });
+          })();
+        } else {
+          value = validator.validate(get(model, attribute), options, model, attribute);
+        }
+
+        return validationReturnValueHandler(attribute, value, model, validator);
+      });
+
+      return _emberCpValidationsValidationsResultCollection['default'].create({
+        attribute: attribute,
+        content: (0, _emberCpValidationsUtilsFlatten['default'])(validationResults)
+      });
+    })])).readOnly();
+  }
+
+  /**
+   * Create a mixin that will have all the top level CPs under the validations object.
+   * These are computed collections on different properties of each attribute validations CP
+   *
+   * @method createTopLevelPropsMixin
+   * @private
+   * @param  {Object} validations
+   */
+  function createTopLevelPropsMixin(validatableAttrs) {
+    return _ember['default'].Mixin.create({
+      isValid: and.apply(undefined, _toConsumableArray(validatableAttrs.map(function (attr) {
+        return 'attrs.' + attr + '.isValid';
+      }))).readOnly(),
+      isValidating: or.apply(undefined, _toConsumableArray(validatableAttrs.map(function (attr) {
+        return 'attrs.' + attr + '.isValidating';
+      }))).readOnly(),
+      isDirty: or.apply(undefined, _toConsumableArray(validatableAttrs.map(function (attr) {
+        return 'attrs.' + attr + '.isDirty';
+      }))).readOnly(),
+      isAsync: or.apply(undefined, _toConsumableArray(validatableAttrs.map(function (attr) {
+        return 'attrs.' + attr + '.isAsync';
+      }))).readOnly(),
+      isNotValidating: not('isValidating').readOnly(),
+      isInvalid: not('isValid').readOnly(),
+      isTruelyValid: and('isValid', 'isNotValidating').readOnly(),
+
+      messages: computed.apply(undefined, _toConsumableArray(validatableAttrs.map(function (attr) {
+        return 'attrs.' + attr + '.messages';
+      })).concat([function () {
+        var _this3 = this;
+
+        return emberArray((0, _emberCpValidationsUtilsFlatten['default'])(validatableAttrs.map(function (attr) {
+          return get(_this3, 'attrs.' + attr + '.messages');
+        }))).compact();
+      }])).readOnly(),
+
+      message: computed('messages.[]', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+        return get(this, 'messages.0');
+      })).readOnly(),
+
+      errors: computed.apply(undefined, _toConsumableArray(validatableAttrs.map(function (attr) {
+        return 'attrs.' + attr + '.@each.errors';
+      })).concat([function () {
+        var _this4 = this;
+
+        return emberArray((0, _emberCpValidationsUtilsFlatten['default'])(validatableAttrs.map(function (attr) {
+          return get(_this4, 'attrs.' + attr + '.errors');
+        }))).compact();
+      }])).readOnly(),
+
+      error: computed('errors.[]', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+        return get(this, 'errors.0');
+      })).readOnly(),
+
+      _promise: computed.apply(undefined, _toConsumableArray(validatableAttrs.map(function (attr) {
+        return 'attrs.' + attr + '._promise';
+      })).concat([function () {
+        var _this5 = this;
+
+        var promises = [];
+
+        validatableAttrs.forEach(function (attr) {
+          var validation = get(_this5, 'attrs.' + attr);
+
+          if (get(validation, 'isAsync')) {
+            promises.push(get(validation, '_promise'));
+          }
+        });
+        return RSVP.Promise.all((0, _emberCpValidationsUtilsFlatten['default'])(promises));
+      }])).readOnly()
+    });
+  }
+
+  /**
+   * CP dependency generator for a give attribute depending on its relationships
+   * @method getCPDependentKeysFor
+   * @private
+   * @param  {String} attribute
+   * @param  {Array / Object} validations
+   * @return {Array} Unique list of dependencies
+   */
+  function getCPDependentKeysFor(attribute, validations) {
+    var dependentKeys = emberArray();
+
+    dependentKeys.push('_model.' + attribute);
+
+    validations.forEach(function (validation) {
+      var type = validation._type;
+      var options = validation.options;
+
+      if (type === 'belongs-to') {
+        dependentKeys.push(attribute + '.isTruelyValid');
+      } else if (type === 'has-many') {
+        dependentKeys.push(attribute + '.@each.isTruelyValid');
+      } else if (type === 'ds-error') {
+        dependentKeys.push('_model.errors.' + attribute + '.[]');
+      } else if (type === 'confirmation' && validation.options.on) {
+        dependentKeys.push('_model.' + validation.options.on);
+      } else if (type === 'dependent') {
+        var dependents = get(validation, 'options.on');
+
+        if (!isEmpty(dependents)) {
+          dependents.forEach(function (dependent) {
+            return dependentKeys.push(dependent + '.isTruelyValid');
+          });
+        }
+      } else if (type === 'collection' && (options === true || options.collection === true)) {
+        dependentKeys.push('_model.' + attribute + '.[]');
+      }
+
+      var specifiedDependents = [].concat(getWithDefault(options, 'dependentKeys', []), getWithDefault(validation, 'defaultOptions.dependentKeys', []), getWithDefault(validation, 'globalOptions.dependentKeys', []));
+
+      specifiedDependents.forEach(function (d) {
+        dependentKeys.push('_model.' + d);
+      });
+    });
+
+    return dependentKeys.uniq();
+  }
+
+  /**
+   * Debounce handler for running a validation for the specified options
+   * @method debouncedValidate
+   * @private
+   * @param  {Validator} validator
+   * @param  {Unknown} value
+   * @param  {Object} options
+   * @param  {Object} model
+   * @param  {String} attribute
+   * @param  {Function} resolve
+   */
+  function debouncedValidate(validator, model, attribute, resolve) {
+    resolve(validator.validate(get(model, attribute), validator.processOptions(), model, attribute));
+  }
+
+  /**
+   * A handler used to create ValidationResult object from values returned from a validator
+   * @method validationReturnValueHandler
+   * @private
+   * @param  {String} attribute
+   * @param  {Unknown} value
+   * @param  {Object} model
+   * @return {ValidationResult}
+   */
+  function validationReturnValueHandler(attribute, value, model, validator) {
+    var result = undefined;
+
+    if (canInvoke(value, 'then')) {
+      result = _emberCpValidationsValidationsResult['default'].create({
+        attribute: attribute,
+        _promise: Promise.resolve(value),
+        model: model,
+        _validator: validator
+      });
+    } else {
+      result = _emberCpValidationsValidationsResult['default'].create({
+        attribute: attribute,
+        model: model,
+        _validator: validator
+      });
+      result.update(value);
+    }
+
+    return result;
+  }
+
+  /**
+   * Get validators for the give attribute. If they are not in the cache, then create them.
+   * @method getValidatorsFor
+   * @private
+   * @param  {String} attribute
+   * @param  {Object} model
+   * @return {Array}
+   */
+  function getValidatorsFor(attribute, model) {
+    var validators = get(model, 'validations._validators.' + attribute);
+
+    if (!isNone(validators)) {
+      return validators;
+    }
+
+    return createValidatorsFor(attribute, model);
+  }
+
+  /**
+   * Get debounced validation cache for the given attribute. If it doesnt exist, create a new one.
+   * @method getValidatorCacheFor
+   * @private
+   * @param  {String} attribute
+   * @param  {Object} model
+   * @return {Map}
+   */
+  function getDebouncedValidationsCacheFor(attribute, model) {
+    var debouncedValidations = get(model, 'validations._debouncedValidations');
+
+    if (isNone(get(debouncedValidations, attribute))) {
+      (0, _emberCpValidationsUtilsAssign['default'])(debouncedValidations, attribute, {});
+    }
+
+    return get(debouncedValidations, attribute);
+  }
+
+  /**
+   * Create validators for the give attribute and store them in a cache
+   * @method createValidatorsFor
+   * @private
+   * @param  {String} attribute
+   * @param  {Object} model
+   * @return {Array}
+   */
+  function createValidatorsFor(attribute, model) {
+    var validations = get(model, 'validations');
+    var validationRules = makeArray(get(validations, '_validationRules.' + attribute));
+    var validatorCache = get(validations, '_validators');
+    var owner = (0, _emberGetownerPolyfill['default'])(model);
+    var validators = [];
+    var validator = undefined;
+
+    // We must have an owner to be able to lookup our validators
+    if (isNone(owner)) {
+      throw new TypeError('[ember-cp-validations] ' + model.toString() + ' is missing a container or owner.');
+    }
+
+    validationRules.forEach(function (v) {
+      v.attribute = attribute;
+      v.model = model;
+
+      // If validate function exists, that means validator was created with a function so use the base class
+      if (v._type === 'function') {
+        validator = _emberCpValidationsValidatorsBase['default'].create(owner.ownerInjection(), v);
+      } else {
+        validator = lookupValidator(owner, v._type).create(v);
+      }
+      validators.push(validator);
+    });
+
+    // Add validators to model instance cache
+    (0, _emberCpValidationsUtilsAssign['default'])(validatorCache, attribute, validators);
+
+    return validators;
+  }
+
+  /**
+   * Lookup a validators of a specific type on the owner
+   * @method lookupValidator
+   * @throws {Error} Validator not found
+   * @private
+   * @param  {Ember.Owner} owner
+   * @param  {String} type
+   * @return {Class} Validator class or undefined if not found
+   */
+  function lookupValidator(owner, type) {
+    var validatorClass = owner._lookupFactory('validator:' + type);
+
+    if (isNone(validatorClass)) {
+      throw new Error('[ember-cp-validations] Validator not found of type: ' + type + '.');
+    }
+    return validatorClass;
+  }
+
+  /**
+   * ### Options
+   * - `on` (**Array**): Only validate the given attributes. If empty, will validate over all validatable attribute
+   * - `excludes` (**Array**): Exclude validation on the given attributes
+   *
+   * ```javascript
+   * model.validate({ on: ['username', 'email'] }).then(({ m, validations }) => {
+   *   validations.get('isValid'); // true or false
+   *   validations.get('isValidating'); // false
+   *
+   *   let usernameValidations = m.get('validations.attrs.username');
+   *   usernameValidations.get('isValid') // true or false
+   * });
+   * ```
+   *
+   * @method validate
+   * @param  {Object}  options
+   * @param  {Boolean} async      If `false`, will get all validations and will error if an async validations is found.
+   *                              If `true`, will get all validations and wrap them in a promise hash
+   * @return {Promise or Object}  Promise if async is true, object if async is false
+   */
+  function validate() {
+    var _this6 = this;
+
+    var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+    var async = arguments.length <= 1 || arguments[1] === undefined ? true : arguments[1];
+
+    var model = get(this, 'model');
+    var whiteList = makeArray(options.on);
+    var blackList = makeArray(options.excludes);
+
+    var validationResults = get(this, 'validatableAttributes').reduce(function (v, name) {
+      if (!isEmpty(blackList) && blackList.indexOf(name) !== -1) {
+        return v;
+      }
+
+      if (isEmpty(whiteList) || whiteList.indexOf(name) !== -1) {
+        var validationResult = get(_this6, 'attrs.' + name);
+
+        // If an async validation is found, throw an error
+        if (!async && get(validationResult, 'isAsync')) {
+          throw new Error('[ember-cp-validations] Synchronous validation failed due to ' + name + ' being an async validation.');
+        }
+
+        v.push(validationResult);
+      }
+      return v;
+    }, []);
+
+    var validationResultsCollection = _emberCpValidationsValidationsResultCollection['default'].create({
+      content: validationResults
+    });
+
+    var resultObject = {
+      model: model,
+      validations: validationResultsCollection
+    };
+
+    if (async) {
+      if (get(validationResultsCollection, 'isAsync')) {
+        resultObject.promise = get(validationResultsCollection, 'value');
+      }
+      return RSVP.hash(resultObject);
+    }
+
+    return resultObject;
+  }
+
+  /**
+   * ### Options
+   * - `on` (**Array**): Only validate the given attributes. If empty, will validate over all validatable attribute
+   * - `excludes` (**Array**): Exclude validation on the given attributes
+   *
+   * ```javascript
+   * const { m, validations } = model.validateSync();
+   * validations.get('isValid') // true or false
+   * ```
+   * @method validateSync
+   * @param  {Object}  options
+   * @return {Object}
+   */
+  function validateSync(options) {
+    return this.validate(options, false);
+  }
+});
+define('ember-cp-validations/validations/result-collection', ['exports', 'ember', 'ember-cp-validations/utils/flatten', 'ember-cp-validations/utils/cycle-breaker'], function (exports, _ember, _emberCpValidationsUtilsFlatten, _emberCpValidationsUtilsCycleBreaker) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var get = _ember['default'].get;
+  var set = _ember['default'].set;
+  var RSVP = _ember['default'].RSVP;
+  var computed = _ember['default'].computed;
+  var isEmpty = _ember['default'].isEmpty;
+  var isArray = _ember['default'].isArray;
+  var isNone = _ember['default'].isNone;
+  var emberArray = _ember['default'].A;
+
+  var A = emberArray();
+
+  function callable(method) {
+    return function (collection) {
+      return A[method].apply(collection, arguments);
+    };
+  }
+
+  var uniq = callable('uniq');
+  var compact = callable('compact');
+
+  /**
+   * @module Validations
+   * @class ResultCollection
+   */
+  exports['default'] = _ember['default'].Object.extend({
+
+    /**
+     * A set of all validator {{#crossLink "Result"}}{{/crossLink}} objects for this specific attribute
+     * @property content
+     * @type {Ember.Array}
+     */
+    content: null,
+
+    /**
+     * The attribute that this collection belongs to
+     * @property attribute
+     * @type {String}
+     */
+    attribute: '',
+
+    init: function init() {
+      this._super.apply(this, arguments);
+      set(this, 'content', emberArray(get(this, 'content')));
+    },
+
+    /**
+     * ```javascript
+     * // Examples
+     * get(user, 'validations.isInvalid')
+     * get(user, 'validations.attrs.username.isInvalid')
+     * ```
+     *
+     * @property isInvalid
+     * @readOnly
+     * @type {Ember.ComputedProperty | Boolean}
+     */
+    isInvalid: computed.not('isValid'),
+
+    /**
+     * ```javascript
+     * // Examples
+     * get(user, 'validations.isValid')
+     * get(user, 'validations.attrs.username.isValid')
+     * ```
+     *
+     * @property isValid
+     * @default true
+     * @readOnly
+     * @type {Ember.ComputedProperty | Boolean}
+     */
+    isValid: computed('content.@each.isValid', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      return get(this, 'content').isEvery('isValid', true);
+    }, true)),
+
+    /**
+     * This property is toggled only if there is an async validation
+     *
+     * ```javascript
+     * // Examples
+     * get(user, 'validations.isValidating')
+     * get(user, 'validations.attrs.username.isValidating')
+     * ```
+     *
+     * @property isValidating
+     * @default false
+     * @readOnly
+     * @type {Ember.ComputedProperty | Boolean}
+     */
+    isValidating: computed('content.@each.isValidating', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      return !get(this, 'content').isEvery('isValidating', false);
+    }, false)),
+
+    /**
+     * Will be true only if isValid is `true` and isValidating is `false`
+     *
+     * ```javascript
+     * // Examples
+     * get(user, 'validations.isTruelyValid')
+     * get(user, 'validations.attrs.username.isTruelyValid')
+     * ```
+     *
+     * @property isTruelyValid
+     * @default true
+     * @readOnly
+     * @type {Ember.ComputedProperty | Boolean}
+     */
+    isTruelyValid: computed('content.@each.isTruelyValid', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      return get(this, 'content').isEvery('isTruelyValid', true);
+    }, true)),
+
+    /**
+     * Will be true is the attribute in question is not `null` or `undefined`. If the object being
+     * validated is an Ember Data Model and you have a `defaultValue` specified, then it will use that for comparison.
+     *
+     * ```javascript
+     * // Examples
+     * // 'username' : DS.attr('string', { defaultValue: 'johndoe' })
+     * get(user, 'validations.isDirty')
+     * get(user, 'validations.attrs.username.isDirty')
+     * ```
+     *
+     * @property isDirty
+     * @default false
+     * @readOnly
+     * @type {Ember.ComputedProperty | Boolean}
+     */
+    isDirty: computed('content.@each.isDirty', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      return !get(this, 'content').isEvery('isDirty', false);
+    }, false)),
+
+    /**
+     * Will be `true` only if a validation returns a promise
+     *
+     * ```javascript
+     * // Examples
+     * get(user, 'validations.isAsync')
+     * get(user, 'validations.attrs.username.isAsync')
+     * ```
+     *
+     * @property isAsync
+     * @default false
+     * @readOnly
+     * @type {Ember.ComputedProperty | Boolean}
+     */
+    isAsync: computed('content.@each.isAsync', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      return !get(this, 'content').isEvery('isAsync', false);
+    }, false)),
+
+    /**
+     * A collection of all error messages on the object in question
+     *
+     * ```javascript
+     * // Examples
+     * get(user, 'validations.messages')
+     * get(user, 'validations.attrs.username.messages')
+     * ```
+     *
+     * @property messages
+     * @readOnly
+     * @type {Ember.ComputedProperty | Array}
+     */
+    messages: computed('content.@each.messages', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      var messages = (0, _emberCpValidationsUtilsFlatten['default'])(get(this, 'content').getEach('messages'));
+
+      return uniq(compact(messages));
+    })),
+
+    /**
+     * An alias to the first message in the messages collection.
+     *
+     * ```javascript
+     * // Example
+     * get(user, 'validations.message')
+     * get(user, 'validations.attrs.username.message')
+     * ```
+     *
+     * @property message
+     * @readOnly
+     * @type {Ember.ComputedProperty | String}
+     */
+    message: computed('messages.[]', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      return get(this, 'messages.0');
+    })),
+
+    /**
+     * A collection of all {{#crossLink "Error"}}Errors{{/crossLink}} on the object in question. Each error object includes the error message and it's associated attribute name.
+     *
+     * ```javascript
+     * // Example
+     * get(user, 'validations.errors')
+     * get(user, 'validations.attrs.username.errors')
+     * ```
+     *
+     * @property errors
+     * @readOnly
+     * @type {Ember.ComputedProperty | Array}
+     */
+    errors: computed('content.@each.errors', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      var errors = (0, _emberCpValidationsUtilsFlatten['default'])(get(this, 'content').getEach('errors'));
+
+      return uniq(compact(errors));
+    })),
+
+    /**
+     * An alias to the first {{#crossLink "Error"}}{{/crossLink}} in the errors collection.
+     *
+     * ```javascript
+     * // Example
+     * get(user, 'validations.error')
+     * get(user, 'validations.attrs.username.error')
+     * ```
+     *
+     * @property error
+     * @readOnly
+     * @type {Ember.ComputedProperty | Error}
+     */
+    error: computed('errors.[]', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      return get(this, 'errors.0');
+    })),
+
+    /**
+     * All built options of the validators associated with the results in this collection grouped by validator type
+     *
+     * ```javascript
+     * // Given the following validators
+     * {
+     *   username: [
+     *     validator('presence', true),
+     *     validator('length', { max: 15 }),
+     *     validator('format', { regex: /foo/ }),
+     *     validator('format', { regex: /bar/ }),
+     *   ]
+     * }
+     * ```
+     *
+     * ```js
+     * get(user, 'validations.attrs.username.options')
+     * ```
+     *
+     * The above will return the following
+     * ```js
+     * {
+     *   'presence': { presence: true},
+     *   'length': { max: 15 },
+     *   'regex': [{ regex: /foo/ }, { regex: /bar/ }]
+     * }
+     * ```
+     *
+     * @property options
+     * @readOnly
+     * @type {Ember.ComputedProperty | Object}
+     */
+    options: computed('content.[]', function () {
+      return this._groupValidatorOptions();
+    }),
+
+    /**
+     * @property _promise
+     * @async
+     * @private
+     * @type {Ember.ComputedProperty | Promise}
+     */
+    _promise: computed('content.@each._promise', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      var promises = get(this, 'content').getEach('_promise');
+
+      if (!isEmpty(promises)) {
+        return RSVP.all(compact((0, _emberCpValidationsUtilsFlatten['default'])(promises)));
+      }
+    })),
+
+    /**
+     * @property value
+     * @type {Ember.ComputedProperty}
+     * @private
+     */
+    value: computed('isAsync', (0, _emberCpValidationsUtilsCycleBreaker['default'])(function () {
+      return get(this, 'isAsync') ? get(this, '_promise') : this;
+    })),
+
+    /**
+     * Used by the `options` property to create a hash from the `content` that is grouped by validator type.
+     * If there is more than 1 of a type, it groups it into an array of option objects.
+     *
+     * @method  _groupValidatorOptions
+     * @return  {Object}
+     * @private
+     */
+    _groupValidatorOptions: function _groupValidatorOptions() {
+      var validators = get(this, 'content').getEach('_validator');
+
+      return validators.reduce(function (options, v) {
+        if (isNone(v) || isNone(get(v, '_type'))) {
+          return options;
+        }
+
+        var type = get(v, '_type');
+        var vOpts = get(v, 'options');
+
+        if (options[type]) {
+          if (isArray(options[type])) {
+            options[type].push(vOpts);
+          } else {
+            options[type] = [options[type], vOpts];
+          }
+        } else {
+          options[type] = vOpts;
+        }
+        return options;
+      }, {});
+    }
+  });
+});
+define('ember-cp-validations/validations/result', ['exports', 'ember', 'ember-cp-validations/validations/result-collection', 'ember-cp-validations/validations/error', 'ember-cp-validations/utils/utils'], function (exports, _ember, _emberCpValidationsValidationsResultCollection, _emberCpValidationsValidationsError, _emberCpValidationsUtilsUtils) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var get = _ember['default'].get;
+  var set = _ember['default'].set;
+  var isNone = _ember['default'].isNone;
+  var isArray = _ember['default'].isArray;
+  var computed = _ember['default'].computed;
+  var canInvoke = _ember['default'].canInvoke;
+  var makeArray = _ember['default'].makeArray;
+  var setProperties = _ember['default'].setProperties;
+  var getProperties = _ember['default'].getProperties;
+  var defineProperty = _ember['default'].defineProperty;
+  var emberArray = _ember['default'].A;
+  var and = computed.and;
+  var not = computed.not;
+
+  /**
+   * This class is `private` and is only used by {{#crossLink 'ResultCollection'}}{{/crossLink}}
+   * @module Validations
+   * @class Result
+   * @private
+   */
+
+  var ValidationsObject = _ember['default'].Object.extend({
+    model: null,
+    isValid: true,
+    isValidating: false,
+    message: null,
+    attribute: '',
+
+    attrValue: null,
+    _promise: null,
+
+    init: function init() {
+      this._super.apply(this, arguments);
+      // TODO: Not good practice. Stef will make this go away.
+      defineProperty(this, 'attrValue', computed.oneWay('model.' + get(this, 'attribute')));
+    },
+
+    isNotValidating: not('isValidating'),
+    isInvalid: not('isValid'),
+    isTruelyValid: and('isNotValidating', 'isValid'),
+
+    isAsync: computed('_promise', function () {
+      var promise = get(this, '_promise');
+
+      return !isNone(promise) && canInvoke(promise, 'then');
+    }),
+
+    isDirty: computed('attrValue', function () {
+      var model = get(this, 'model');
+      var attribute = get(this, 'attribute');
+      var attrValue = get(this, 'attrValue');
+
+      // Check default model values
+      if ((0, _emberCpValidationsUtilsUtils.hasEmberData)() && model instanceof self.DS.Model && canInvoke(model, 'eachAttribute')) {
+        var attrMeta = model.get('constructor.attributes').get(attribute);
+
+        if (attrMeta) {
+          var defaultValue = attrMeta.options.defaultValue;
+
+          if (!isNone(defaultValue)) {
+            return defaultValue !== attrValue;
+          }
+        }
+      }
+      return !isNone(attrValue);
+    }),
+
+    messages: computed('message', function () {
+      return makeArray(get(this, 'message'));
+    }),
+
+    error: computed('message', 'isInvalid', 'attribute', function () {
+      if (get(this, 'isInvalid')) {
+        return _emberCpValidationsValidationsError['default'].create({
+          message: get(this, 'message'),
+          attribute: get(this, 'attribute')
+        });
+      }
+
+      return null;
+    }),
+
+    errors: computed('error', function () {
+      return makeArray(get(this, 'error'));
+    })
+  });
+
+  exports['default'] = _ember['default'].Object.extend({
+
+    /**
+     * @property model
+     * @type {Object}
+     */
+    model: null,
+
+    /**
+     * @property attribute
+     * @type {String}
+     */
+    attribute: '',
+
+    /**
+     * @property _promise
+     * @async
+     * @private
+     * @type {Promise}
+     */
+    _promise: null,
+
+    /**
+     * The validator that returned this result
+     * @property _validator
+     * @private
+     * @type {Validator}
+     */
+    _validator: null,
+
+    /**
+     * @property isValid
+     * @readOnly
+     * @type {Ember.ComputedProperty}
+     */
+    isValid: computed.oneWay('_validations.isValid'),
+
+    /**
+     * @property isInvalid
+     * @readOnly
+     * @type {Ember.ComputedProperty}
+     */
+    isInvalid: computed.oneWay('_validations.isInvalid'),
+
+    /**
+     * @property isValidating
+     * @readOnly
+     * @type {Ember.ComputedProperty}
+     */
+    isValidating: computed.oneWay('_validations.isValidating'),
+
+    /**
+     * @property isTruelyValid
+     * @readOnly
+     * @type {Ember.ComputedProperty}
+     */
+    isTruelyValid: computed.oneWay('_validations.isTruelyValid'),
+
+    /**
+     * @property isAsync
+     * @readOnly
+     * @type {Ember.ComputedProperty}
+     */
+    isAsync: computed.oneWay('_validations.isAsync'),
+
+    /**
+     * @property isDirty
+     * @readOnly
+     * @type {Ember.ComputedProperty}
+     */
+    isDirty: computed.oneWay('_validations.isDirty'),
+
+    /**
+     * @property message
+     * @readOnly
+     * @type {Ember.ComputedProperty}
+     */
+    message: computed.oneWay('_validations.message'),
+
+    /**
+     * @property messages
+     * @readOnly
+     * @type {Ember.ComputedProperty}
+     */
+    messages: computed.oneWay('_validations.messages'),
+
+    /**
+     * @property error
+     * @readOnly
+     * @type {Ember.ComputedProperty}
+     */
+    error: computed.oneWay('_validations.error'),
+
+    /**
+     * @property errors
+     * @readOnly
+     * @type {Ember.ComputedProperty}
+     */
+    errors: computed.oneWay('_validations.errors'),
+
+    /**
+     * This hold all the logic for the above CPs. We do this so we can easily switch this object out with a different validations object
+     * @property _validations
+     * @private
+     * @type {Result}
+     */
+    _validations: computed('model', 'attribute', '_promise', function () {
+      return ValidationsObject.create(getProperties(this, ['model', 'attribute', '_promise']));
+    }),
+
+    init: function init() {
+      this._super.apply(this, arguments);
+
+      if (get(this, 'isAsync')) {
+        this._handlePromise();
+      }
+    },
+
+    /**
+     * Update the current validation result object with the given result
+     * - If result is undefined or null, set isValid to false
+     * - If result is a validations object from a different model/object, set the _validations object to the one given (belongs-to)
+     * - If result is a collection of validation result objects, create a Validation Result Collection and set that to the _validations object (has-many)
+     * - If result is a string, set the message to the given string and set isValid to false
+     * - If result is a boolean, set isValid to result
+     * - If result is a pojo, update _validations object with the information given
+     *
+     * @method update
+     * @private
+     * @param result
+     */
+    update: function update(result) {
+      var validations = get(this, '_validations');
+
+      if (isNone(result)) {
+        this.update(false);
+        return;
+      }
+
+      if (get(result, 'isValidations')) {
+        set(this, '_validations', result);
+      } else if (isArray(result) && emberArray(result).isEvery('isValidations', true)) {
+        var validationResultsCollection = _emberCpValidationsValidationsResultCollection['default'].create({
+          attribute: get(this, 'attribute'),
+          content: result
+        });
+
+        set(this, '_validations', validationResultsCollection);
+      } else if (typeof result === 'string') {
+        setProperties(validations, {
+          message: result,
+          isValid: false
+        });
+      } else if (typeof result === 'boolean') {
+        set(validations, 'isValid', result);
+      } else if (typeof result === 'object') {
+        setProperties(validations, result);
+      }
+    },
+
+    /**
+     * Promise handler
+     * @method  _handlePromise
+     * @private
+     */
+    _handlePromise: function _handlePromise() {
+      var _this = this;
+
+      var validations = get(this, '_validations');
+
+      set(validations, 'isValidating', true);
+      get(this, '_promise').then(function (result) {
+        return _this.update(result);
+      }, function (result) {
+        return _this.update(result);
+      })['catch'](function (reason) {
+        // TODO: send into error state
+        throw reason;
+      })['finally'](function () {
+        set(validations, 'isValidating', false);
+      });
+    }
+  });
+});
+define('ember-cp-validations/validations/validator', ['exports', 'ember'], function (exports, _ember) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+  'use strict';
+
+  var isNone = _ember['default'].isNone;
+
+  /**
+   * ## Common Options
+   *
+   * <h3 id="description">description</h3>
+   * A descriptor for your attribute used in the error message strings. Defaults to `This field'`.
+   * You can overwrite this value in your `validators/messages.js` file by changing the `defaultDescription` property.
+   *
+   * ```javascript
+   * // Examples
+   * validator('date', {
+   *   description: 'Date of birth'
+   * })
+   * // If validation is run and the attribute is empty, the error returned will be:
+   * // 'Date of birth can't be blank'
+   * ```
+   *
+   * <h3 id="dependentKeys">dependentKeys</h3>
+   * A list of other model specific dependents for you validator.
+   *
+   * ```javascript
+   * // Examples
+   * validator('has-friends', {
+   *   dependentKeys: ['friends.[]']
+   * })
+   * validator('has-valid-friends', {
+   *   dependentKeys: ['friends.@each.username']
+   * })
+   * validator('x-validator', {
+   *   dependentKeys: ['username', 'email', 'meta.foo.bar']
+   * })
+   * ```
+   *
+   * <h3 id="disabled">disabled</h3>
+   * If set to `true`, disables the given validator. This option would usually go hand-in-hand
+   * with {{#crossLinkModule 'Advanced Usage'}}options as functions{{/crossLinkModule}} and `dependentKeys`. Defaults to `false`.
+   *
+   * ```js
+   * // Examples
+   * validator('presence', {
+   *   presence: true,
+   *   disabled: true
+   * })
+   * validator('presence', {
+   *   presence: true,
+   *   dependentKeys: ['shouldValidate'],
+   *   disabled() {
+   *     return !this.get('model.shouldValidate');
+   *   }
+   * })
+   * ```
+   *
+   * <h3 id="debounce">debounce</h3>
+   * Debounces the validation with the given time in `milliseconds`. All debounced validations will be handled asynchronously (wrapped in a promise).
+   *
+   * ```javascript
+   * // Examples
+   * validator('length', {
+   *   debounce: 500
+   * })
+   * validator('x-validator', {
+   *   debounce: 250
+   * })
+   * ```
+   *
+   * <h3 id="message">message</h3>
+   * This option can take two forms. It can either be a `string` or a `function`. If a string is used, then it will overwrite all error message types for the specified validator.
+   *
+   * ```javascript
+   * // Example: String
+   * validator('confirmation', {
+   *   message: 'Email does not match {attribute}. What are you even thinking?!'
+   * })
+   * ```
+   *
+   * We can pass a `function` into our message option for even more customization capabilities.
+   *
+   * ```javascript
+   * // Example: Function
+   * validator('date', {
+   *   message: function(type, options, value, context) {
+   *     if (type === 'before') {
+   *       return '{description} should really be before {date}';
+   *     }
+   *     if (type === 'after') {
+   *       return '{description} should really be after {date}';
+   *     }
+   *   }
+   * })
+   * ```
+   * The message function is given the following arguments:
+   *
+   * - `type` (**String**): The error message type
+   * - `options` (**Object**): The validator options that were defined in the model
+   * - `value`: The current value being evaluated
+   * - `context` (**Object**): Context for string replacement
+   *
+   * The return value must be a `string`. If nothing is returned (`undefined`), defaults to the default error message of the specified type.
+   *
+   * Within this function, the context is set to that of the current validator. This gives you access to the model, defaultMessages, options and more.
+   *
+   *
+   * <h2 id="functionBasedValidators">Function Based Validators</h2>
+   *
+   * A validator can also be declared with a function. The function will be then wrapped in the [Base Validator](./base.md) class and used just like any other pre-defined validator.
+   *
+   * ```javascript
+   * // Example
+   * validator(function(value, options, model, attribute) {
+   *   return value === options.username ? true : `must be ${options.username}`;
+   * } , {
+   *   username: 'John' // Any options can be passed here
+   * })
+   * ```
+   *
+   * @module Validators
+   * @main Validators
+   */
+
+  exports['default'] = function (arg1, options) {
+    var props = {
+      options: isNone(options) ? {} : options
+    };
+
+    if (typeof arg1 === 'function') {
+      props.validate = arg1;
+      props._type = 'function';
+    } else if (typeof arg1 === 'string') {
+      props._type = arg1;
+    } else {
+      throw new TypeError('[ember-cp-validations] Unexpected type for first validator argument. It should either be a string or a function');
+    }
+
+    return props;
+  };
+});
+define('ember-cp-validations/validators/base', ['exports', 'ember', 'ember-cp-validations/validators/messages', 'ember-getowner-polyfill'], function (exports, _ember, _emberCpValidationsValidatorsMessages, _emberGetownerPolyfill) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var get = _ember['default'].get;
+  var set = _ember['default'].set;
+  var isNone = _ember['default'].isNone;
+
+  var assign = _ember['default'].assign || _ember['default'].merge;
+
+  /**
+   * @class Base
+   * @module Validators
+   */
+  exports['default'] = _ember['default'].Object.extend({
+
+    /**
+     * Options passed in to the validator when defined in the model
+     * @property options
+     * @type {Object}
+     */
+    options: null,
+
+    /**
+     * Default validation options for this specific attribute
+     * @property defaultOptions
+     * @type {Object}
+     */
+    defaultOptions: null,
+
+    /**
+     * Global validation options for this model
+     * @property globalOptions
+     * @type {Object}
+     */
+    globalOptions: null,
+
+    /**
+     * Model instance
+     * @property model
+     * @type {Model}
+     */
+    model: null,
+
+    /**
+     * Attributed name of the model this validator is attached to
+     * @property attribute
+     * @type {String}
+     */
+    attribute: null,
+
+    /**
+     * Error message object. Populated by validators/messages
+     * @property errorMessages
+     * @type {Object}
+     */
+    errorMessages: null,
+
+    /**
+     * Validator type
+     * @property _type
+     * @private
+     * @type {String}
+     */
+    _type: null,
+
+    init: function init() {
+      this._super.apply(this, arguments);
+      var globalOptions = get(this, 'globalOptions');
+      var defaultOptions = get(this, 'defaultOptions');
+      var options = get(this, 'options');
+      var owner = (0, _emberGetownerPolyfill['default'])(this);
+      var errorMessages = undefined;
+
+      if (!isNone(owner)) {
+        // Since default error messages are stored in app/validators/messages, we have to look it up via the owner
+        errorMessages = owner._lookupFactory('validator:messages');
+      }
+
+      // If for some reason, we can't find the messages object (i.e. unit tests), use default
+      errorMessages = errorMessages || _emberCpValidationsValidatorsMessages['default'];
+
+      set(this, 'options', this.buildOptions(options || {}, defaultOptions || {}, globalOptions || {}));
+      set(this, 'errorMessages', errorMessages.create());
+    },
+
+    /**
+     * Build options hook. Merges default options into options object.
+     * This method gets called on init and is the ideal place to normalize your options.
+     * The [presence validator](https://github.com/offirgolan/ember-cp-validations/blob/master/app/validators/presence.js) is a good example to checkout
+     * @method buildOptions
+     * @param  {Object} options
+     * @param  {Object} defaultOptions
+     * @param  {Object} globalOptions
+     * @return {Object}
+     */
+    buildOptions: function buildOptions() {
+      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+      var defaultOptions = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+      var globalOptions = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+
+      return assign(assign(assign({}, globalOptions), defaultOptions), options);
+    },
+
+    /**
+     * Creates a new object and calls any option property that is a function with the validator context.
+     * This method is called right before `validate` and the returned object gets passed into the validate method as its options
+     * @method processOptions
+     * @return {Object}
+     */
+    processOptions: function processOptions() {
+      var _this = this;
+
+      var options = assign({}, get(this, 'options') || {});
+
+      Object.keys(options).forEach(function (key) {
+        var opt = options[key];
+
+        if (typeof opt === 'function' && key !== 'message') {
+          options[key] = opt.call(_this);
+        }
+      });
+
+      return options;
+    },
+
+    /**
+     * The validate method is where all of your logic should go.
+     * It will get passed in the current value of the attribute this validator is attached to.
+     * Within the validator object, you will have access to the following properties:
+     * @method validate
+     * @param  {Unknown} value        The current value of the attribute
+     * @param  {Object} options       The built and processed options
+     * @param  {Object} model         The current model being evaluated
+     * @param  {String} attribute     The current attribute being evaluated
+     * @return
+     * One of the following types:
+     * - `Boolean`:  `true` if the current value passed the validation
+     * - `String`: The error message
+     * - `Promise`: A promise that will either resolve or reject, and will finally return either `true` or the final error message string.
+     */
+    validate: function validate() {
+      return true;
+    },
+
+    /**
+     * Used by all pre-defined validators to build an error message that is present
+     * in `validators/message` or decalred in your i18n solution.
+     *
+     * If we extended our default messages to include `uniqueUsername: '{username} already exists'`,
+     * we can use this method to generate our error message.
+     *
+     * ```javascript
+     * validate(value, options) {
+     *   var exists = false;
+     *
+     *   options.description = 'Username';
+     *   options.username = value;
+     *
+     *   // check with server if username exists...
+     *
+     *   if(exists) {
+     *     return this.createErrorMessage('uniqueUsername', value, options);
+     *   }
+     *
+     *   return true;
+     * }
+     * ```
+     *
+     * If we input `johndoe` and that username already exists, the returned message would be `'johndoe already exists'`.
+     *
+     * @method createErrorMessage
+     * @param  {String} type        The type of message template to use
+     * @param  {Unknown} value                Current value being evaluated
+     * @param  {Object} options     Validator built and processed options (used as the message string context)
+     * @return {String}             The generated message
+     */
+    createErrorMessage: function createErrorMessage(type, value) {
+      var options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+
+      var messages = this.get('errorMessages');
+      var message = undefined;
+
+      options.description = messages.getDescriptionFor(get(this, 'attribute'), options);
+
+      if (options.message) {
+        if (typeof options.message === 'string') {
+          message = messages.formatMessage(options.message, options);
+        } else if (typeof options.message === 'function') {
+          message = options.message.apply(this, arguments);
+          message = isNone(message) ? messages.getMessageFor(type, options) : messages.formatMessage(message, options);
+        }
+      } else {
+        message = messages.getMessageFor(type, options);
+      }
+
+      return message.trim();
+    }
+  });
+
+  /**
+   * Creating custom validators is very simple. To generate a validator named `unique-username` in Ember CLI
+   *
+   * ```bash
+   * ember generate validator unique-username
+   * ```
+   *
+   * This will create the following files
+   *
+   * * `app/validators/unique-username.js`
+   * * `tests/unit/validators/unique-username-test.js`
+   *
+   * ```javascript
+   * // app/validators/unique-username.js
+   *
+   * import Ember from 'ember';
+   * import BaseValidator from 'ember-cp-validations/validators/base';
+   *
+   * export default BaseValidator.extend({
+   *   validate(value, options, model, attribute) {
+   *     return true;
+   *     })
+   *   }
+   * });
+   * ```
+   *
+   * **Side Node**: Before we continue, I would suggest checking out the documentation for the {{#crossLink 'Base'}}Base Validator{{/crossLink}}.
+   *
+   * If you want to interact with the `store` within your validator, you can simply inject the service like you would a component.
+   * Since you have access to your model and the current value, you should be able to send the server the right information to determine if this username is unique.
+   *
+   * ```javascript
+   * // app/validators/unique-username.js
+   *
+   * import Ember from 'ember';
+   * import BaseValidator from 'ember-cp-validations/validators/base';
+   *
+   * export default BaseValidator.extend({
+   *   store: Ember.inject.service(),
+   *
+   *   validate(value, options, model, attribute) {
+   *     return this.get('store').findRecord('user', value).then((user) => {
+   *       if(user && user.id === value) {
+   *         let message = `The username '${value}' already exists.`;
+   *         let meta = user.get('meta');
+   *
+   *         if(options.showSuggestions && meta && meta.suggestions) {
+   *           message += "What about one of the these: " + meta.suggestions.join(', ');
+   *         }
+   *         return message;
+   *       } else {
+   *         return true;
+   *       }
+   *     })
+   *   }
+   * });
+   * ```
+   *
+   * To use our unique-username validator we just have to add it to the model definition
+   *
+   * ```javascript
+   * var Validations = buildValidations({
+   *   username: validator('unique-username', {
+   *     showSuggestions: true
+   *   }),
+   * });
+   *
+   * export default DS.Model.extend(Validations, {
+   *   'username': DS.attr('string'),
+   * });
+   * ```
+   *
+   * ## Testing
+   * As mentioned before, the generator created a unit test for your new custom validator.
+   *
+   * ```javascript
+   * // tests/unit/validators/unique-username-test.js
+   *
+   * import Ember from 'ember';
+   * import { moduleFor, test } from 'ember-qunit';
+   *
+   * moduleFor('validator:unique-username', 'Unit | Validator | unique-username', {
+   *     needs: ['validator:messages']
+   * });
+   *
+   * test('it works', function(assert) {
+   *     var validator =  this.subject();
+   *     assert.ok(validator);
+   * });
+   * ```
+   *
+   * A simple test for our validation method can be as such
+   *
+   * ```javascript
+   * test('username is unique', function(assert) {
+   *     assert.expect(1);
+   *
+   *     let validator =  this.subject();
+   *     let done = assert.async();
+   *
+   *     validator.validate('johndoe42').then((message) => {
+   *       assert.equal(message, true);
+   *       done();
+   *     });
+   * });
+   * ```
+   *  @class Custom
+   *  @module Validators
+   *  @extends Base
+   */
+});
+define('ember-cp-validations/validators/belongs-to', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var get = _ember['default'].get;
+  var canInvoke = _ember['default'].canInvoke;
+
+  /**
+   *  Identifies a `belongs-to` relationship in an Ember Data Model or Ember.Object.
+   *  This is used to create a link to the validations object of the child model.
+   *
+   *  _**Note:** Validations must exist on **both** models/objects_
+   *
+   *  ### Ember Model
+   *
+   *  ```javascript
+   *  // model/users.js
+   *
+   *  const Validations = buildValidations({
+   *    details: validator('belongs-to')
+   *  });
+   *
+   *  export default DS.Model.extend(Validations, {
+   *    'details': DS.belongsTo('user-detail')
+   *  });
+   *  ```
+   *
+   *  ```javascript
+   *  // model/user-details.js
+   *
+   *  const Validations = buildValidations({
+   *    firstName: validator('presence', true),
+   *    lastName: validator('presence', true)
+   *  });
+   *
+   *  export default DS.Model.extend(Validations, {
+   *    "firstName": attr('string'),
+   *    "lastName": attr('string'),
+   *  });
+   *  ```
+   *
+   *  ### Ember Object
+   *
+   *  ```javascript
+   *  // model/users.js
+   *
+   *  import UserDetails from '../user-details';
+   *
+   *  const Validations = buildValidations({
+   *    details: validator('belongs-to')
+   *  });
+   *
+   *  export default Ember.Object.extend(Validations, {
+   *    details: null,
+   *
+   *    init() {
+   *      this._super(...arguments);
+   *      let owner = Ember.getOwner(this);
+   *      this.set('details', UserDetails.create(owner.ownerInjection()));
+   *    }
+   *  });
+   *  ```
+   *
+   *  From our `user` model, we can now check any validation propery on the `user-details` model.
+   *
+   *  ```javascript
+   *  get(model, 'validations.attrs.details.isValid')
+   *  get(model, 'validations.attrs.details.messages')
+   *  ```
+   *
+   *  @class Belongs To
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+    validate: function validate(value) {
+      if (value) {
+        if (canInvoke(value, 'then')) {
+          return value.then(function (model) {
+            return model ? get(model, 'validations') : true;
+          });
+        }
+        return get(value, 'validations');
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/collection', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var isArray = _ember['default'].isArray;
+
+  /**
+   *  If `true` validates that the given value is a valid collection and will add `<ATTRIUTE>.[]` as a dependent key to the CP.
+   *  If `false`, validates that the given value is singular. Use this validator if you want validation to occur when the content of your collection changes.
+   *
+   *  ```javascript
+   *  // Examples
+   *  validator('collection', true)
+   *  validator('collection', false)
+   *  validator('collection', {
+   *    collection: true,
+   *    message: 'must be a collection'
+   *  })
+   *  ```
+   *
+   *  @class Collection
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+
+    /**
+     * Normalized options passed in.
+     * ```js
+     * validator('collection', true)
+     * // Becomes
+     * validator('collection', {
+     *   collection: true
+     * })
+     * ```
+     *
+     * @method buildOptions
+     * @param  {Object}     options
+     * @param  {Object}     defaultOptions
+     * @param  {Object}     globalOptions
+     * @return {Object}
+     */
+    buildOptions: function buildOptions() {
+      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+      var defaultOptions = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+      var globalOptions = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+
+      var opts = options;
+
+      if (typeof options === 'boolean') {
+        opts = {
+          collection: options
+        };
+      }
+      return this._super(opts, defaultOptions, globalOptions);
+    },
+
+    validate: function validate(value, options) {
+      if (options.collection === true && !isArray(value)) {
+        return this.createErrorMessage('collection', value, options);
+      }
+
+      if (options.collection === false && isArray(value)) {
+        return this.createErrorMessage('singular', value, options);
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/confirmation', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var get = _ember['default'].get;
+  var isEqual = _ember['default'].isEqual;
+  var isNone = _ember['default'].isNone;
+
+  /**
+   *  You should use this validator when you have two text fields that should receive exactly the same content.
+   *  For example, you may want to confirm an email address or a password. This validator doesnt have to be created on an attribute defined in your model.
+   *  This means that when you save your model, in this case, `verfiedEmail` will not be part of the payload.
+   *
+   *  ```javascript
+   *  // Example
+   *  email: validator('format', {
+   *    type: 'email'
+   *  })
+   *  verifiedEmail: validator('confirmation', {
+   *    on: 'email',
+   *    message: 'do not match',
+   *    description: 'Email addresses'
+   *  })
+   *  ```
+   *
+   *  @class Confirmation
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+    validate: function validate(value, options, model) {
+      if (!isNone(options.on) && !isEqual(value, get(model, options.on))) {
+        return this.createErrorMessage('confirmation', value, options);
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/date', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var moment = (self.requirejs.entries.moment || self.requirejs.entries['moment/index']) && self.require('moment')['default'];
+
+  if (typeof moment === 'undefined') {
+    throw new Error('MomentJS is required to use the Date validator. The easiest way to install moment.js is to install ember-moment.\n' + 'Installation instructions and documentation can be found at https://github.com/stefanpenner/ember-moment');
+  }
+
+  var isEmpty = _ember['default'].isEmpty;
+
+  /**
+   *  Validate over a date range. Uses [MomentJS](http://momentjs.com/) for date mathematics and calculations.
+   *
+   *  -*Note**: MomentJS must be installed to be able to use this validator. The easiest way to do this is to install [ember-moment](https://github.com/stefanpenner/ember-moment)
+   *
+   *   #### Options
+   *  - `allowBlank` (**Boolean**): If true, skips validation if the value is empty
+   *  - `before` (**String**): The specified date must be before this date
+   *  - `after` (**String**): The specified date must be after this date
+   *  - `format` (**String**): Input value date format
+   *  - `errorFormat` (**String**): Error output date format. Defaults to `MMM Do, YYYY`
+   *
+   *  ```javascript
+   *  // Example
+   *  validator('date', {
+   *      after: 'now',
+   *      before: '1/1/2020',
+   *      format: 'M/D/YYY',
+   *      errorFormat: 'M/D/YYY'
+   *  })
+   *  // If before or after is set to 'now', the value given to the validator will be tested against the current date and time.
+   *  ```
+   *
+   *  @class Date
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+
+    _parseDate: function _parseDate(dateStr, format) {
+      if (dateStr === 'now' || isEmpty(dateStr)) {
+        return moment();
+      }
+      return format ? moment(dateStr, format) : moment(new Date(dateStr));
+    },
+
+    validate: function validate(value, options) {
+      var errorFormat = options.errorFormat || 'MMM Do, YYYY';
+      var format = options.format;
+      var before = options.before;
+      var after = options.after;
+
+      if (options.allowBlank && isEmpty(value)) {
+        return true;
+      }
+
+      var date = this._parseDate(value, format);
+
+      if (!date.isValid()) {
+        return this.createErrorMessage('date', value, options);
+      }
+
+      if (format && !moment(value, format, true).isValid()) {
+        return this.createErrorMessage('wrongDateFormat', value, options);
+      }
+
+      if (before) {
+        before = this._parseDate(before, format);
+        if (before < date) {
+          options.before = before.format(errorFormat);
+          return this.createErrorMessage('before', value, options);
+        }
+      }
+
+      if (after) {
+        after = this._parseDate(after, format);
+        if (after > date) {
+          options.after = after.format(errorFormat);
+          return this.createErrorMessage('after', value, options);
+        }
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/dependent', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var get = _ember['default'].get;
+  var isNone = _ember['default'].isNone;
+  var isEmpty = _ember['default'].isEmpty;
+
+  /**
+   *  Defines an attribute as valid only if its dependents are valid.
+   *
+   *   #### Options
+   *  - `on` (**Array**): Attributes this field is dependent on
+   *
+   *  ```javascript
+   *  // Example
+   *  // Full name will only be valid if firstName and lastName are filled in
+   *  validator('dependent', {
+   *      on: ['firstName', 'lastName'],
+   *  })
+   *  ```
+   *
+   *  @class Dependent
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+    validate: function validate(value, options, model) {
+      if (isNone(options) || isNone(model) || isEmpty(Object.keys(options))) {
+        return true;
+      }
+
+      if (options.allowBlank && isEmpty(value)) {
+        return true;
+      }
+
+      if (isEmpty(options.on)) {
+        return true;
+      }
+
+      var dependentValidations = options.on.map(function (dependent) {
+        return get(model, 'validations.attrs.' + dependent);
+      });
+
+      if (!isEmpty(dependentValidations.filter(function (v) {
+        return !get(v, 'isTruelyValid');
+      }))) {
+        return this.createErrorMessage('invalid', value, options);
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/ds-error', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var DS = self.DS;
+
+  if (typeof self.DS === 'undefined') {
+    throw new Error('Ember-Data is required to use the DS Error validator.');
+  }
+
+  var get = _ember['default'].get;
+  var isNone = _ember['default'].isNone;
+
+  /**
+   *  Creates a link between this library and Ember-Data's [DS.Errors](http://emberjs.com/api/data/classes/DS.Errors.html)
+   *  to fetch the latest message for the given attribute.
+   *
+   *  ```javascript
+   *  // Examples
+   *  validator('ds-error')
+   *  ```
+   *
+   *  @class DS Error
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+    validate: function validate(value, options, model, attribute) {
+      var errors = get(model, 'errors');
+
+      if (!isNone(errors) && errors instanceof DS.Errors && errors.has(attribute)) {
+        return get(errors.errorsFor(attribute), 'lastObject.message');
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/exclusion', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var typeOf = _ember['default'].typeOf;
+  var isEmpty = _ember['default'].isEmpty;
+
+  /**
+   *  Validates that the attributes’ values are not included in a given list. All comparisons are done using strict equality so type matters! For range, the value type is checked against both lower and upper bounds for type equality.
+   *
+   *   #### Options
+   *  - `allowBlank` (**Boolean**): If true, skips validation if the value is empty
+   *  - `in` (**Array**): The list of values this attribute should not be
+   *  - `range` (**Array**): The range in which the attribute's value should not reside in
+   *
+   *  ```javascript
+   *  // Examples
+   *  validator('exclusion', {
+   *      in: ['Admin', 'Super Admin']
+   *  })
+   *  validator('exclusion', {
+   *      range: [0, 5] // Cannot be between 0 (inclusive) to 5 (inclusive)
+   *  })
+   *  ```
+   *
+   *  @class Exclusion
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+    validate: function validate(value, options) {
+      var array = options['in'];
+      var range = options.range;
+
+      if (isEmpty(Object.keys(options))) {
+        return true;
+      }
+
+      if (options.allowBlank && isEmpty(value)) {
+        return true;
+      }
+
+      if (array && array.indexOf(value) !== -1) {
+        return this.createErrorMessage('exclusion', value, options);
+      }
+
+      if (range && range.length === 2) {
+        var min = range[0];
+        var max = range[1];
+        var equalType = typeOf(value) === typeOf(min) && typeOf(value) === typeOf(max);
+
+        if (equalType && min <= value && value <= max) {
+          return this.createErrorMessage('exclusion', value, options);
+        }
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/format', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var get = _ember['default'].get;
+  var isNone = _ember['default'].isNone;
+  var isEmpty = _ember['default'].isEmpty;
+
+  /**
+   *  Validate over a predefined or custom regular expression.
+   *
+   *   #### Options
+   *  - `allowBlank` (**Boolean**): If true, skips validation if the value is empty
+   *  - `type` (**String**): Can be the one of the following options [`email`, `phone`, `url`]
+   *  - `regex` (**RegExp**): The regular expression to test against
+   *
+   *  ```javascript
+   *  // Examples
+   *  validator('format', {
+   *    type: 'email'
+   *  })
+   *  validator('format', {
+   *    allowBlank: true
+   *    type: 'phone'
+   *  })
+   *  validator('format', {
+   *    type: 'url'
+   *  })
+   *  validator('format', {
+   *      regex: /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{4,8}$/,
+   *      message: 'Password must include at least one upper case letter, one lower case letter, and a number'
+   *  })
+   *  ```
+   *
+   *  If you do not want to use the predefined regex for a specific type, you can do something like this
+   *
+   *  ```javascript
+   *  // Example
+   *  validator('format', {
+   *    type: 'email',
+   *    regex: /My Better Email Regexp/
+   *  })
+   *  ```
+   *  This allows you to still keep the email error message but with your own custom regex.
+   *  @class Format
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+    regularExpressions: {
+      email: /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/,
+      phone: /^([\+]?1\s*[-\/\.]?\s*)?(\((\d{3})\)|(\d{3}))\s*[-\/\.]?\s*(\d{3})\s*[-\/\.]?\s*(\d{4})\s*(([xX]|[eE][xX][tT]?[\.]?|extension)\s*([#*\d]+))*$/,
+      url: /(?:([A-Za-z]+):)?(\/{0,3})[a-zA-Z0-9][a-zA-Z-0-9]*(\.[\w-]+)+([\w.,@?^=%&amp;:\/~+#-{}]*[\w@?^=%&amp;\/~+#-{}])??/
+    },
+
+    /**
+     * Normalized options passed in by applying the desired regex or using the one declared
+     *
+     * @method buildOptions
+     * @param  {Object}     options
+     * @param  {Object}     defaultOptions
+     * @param  {Object}     globalOptions
+     * @return {Object}
+     */
+    buildOptions: function buildOptions() {
+      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+      var defaultOptions = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+      var globalOptions = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+
+      var regularExpressions = get(this, 'regularExpressions');
+
+      if (options.type && !isNone(regularExpressions[options.type]) && isNone(options.regex)) {
+        options.regex = regularExpressions[options.type];
+      }
+
+      return this._super(options, defaultOptions, globalOptions);
+    },
+
+    validate: function validate(value, options) {
+      if (isEmpty(Object.keys(options))) {
+        return true;
+      }
+
+      if (options.allowBlank && isEmpty(value)) {
+        return true;
+      }
+
+      if (options.regex && !options.regex.test(value)) {
+        if (options.type) {
+          return this.createErrorMessage(options.type, value, options);
+        }
+        return this.createErrorMessage('invalid', value, options);
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/has-many', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var canInvoke = _ember['default'].canInvoke;
+
+  /**
+   *  Identifies a `has-many` relationship in an Ember Data Model or Ember.Object.
+   *  This is used to create a validation collection of the `has-many` validations.
+   *
+   *  _**Note:** Validations must exist on **all** models/objects_
+   *
+   *  ### Ember Models
+   *
+   *  ```javascript
+   *  // model/users.js
+   *
+   *  const Validations = buildValidations({
+   *    friends: validator('has-many')
+   *  });
+   *
+   *  export default DS.Model.extend(Validations, {
+   *    friends: DS.hasMany('user')
+   *  });
+   *  ```
+   *
+   *  ### Ember Objects
+   *
+   *  ```javascript
+   *  // model/users.js
+   *
+   *  const Validations = buildValidations({
+   *    friends: validator('has-many')
+   *  });
+   *
+   *  export default Ember.Object.extend(Validations, {
+   *    friends: null
+   *  });
+   *  ```
+   *
+   *  From our `user` model, we can now check validation properties on the `friends` attribute.
+   *
+   *  ```javascript
+   *  get(model, 'validations.attrs.friends.isValid')
+   *  get(model, 'validations.attrs.friends.messages')
+   *  ```
+   *
+   *  @class Has Many
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+    validate: function validate(value) {
+      if (value) {
+        if (canInvoke(value, 'then')) {
+          return value.then(function (models) {
+            return models ? models.map(function (m) {
+              return m.get('validations');
+            }) : true;
+          });
+        }
+        return value.map(function (m) {
+          return m.get('validations');
+        });
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/inclusion', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var typeOf = _ember['default'].typeOf;
+  var isEmpty = _ember['default'].isEmpty;
+
+  /**
+   *  Validates that the attributes’ values are included in a given list. All comparisons are done using strict equality so type matters!
+   *  For range, the value type is checked against both lower and upper bounds for type equality.
+   *
+   *   #### Options
+   *  - `allowBlank` (**Boolean**): If true, skips validation if the value is empty
+   *  - `in` (**Array**): The list of values this attribute could be
+   *  - `range` (**Array**): The range in which the attribute's value should reside in
+   *
+   *  ```javascript
+   *  // Examples
+   *  validator('inclusion', {
+   *      in: ['User', 'Admin']
+   *  })
+   *  validator('inclusion', {
+   *      range: [0, 5] // Must be between 0 (inclusive) to 5 (inclusive)
+   *  })
+   *  ```
+   *
+   *  Because of the strict equality comparisons, you can use this validator in many different ways.
+   *
+   *  ```javascript
+   *  // Examples
+   *  validator('inclusion', {
+   *      in: ['Admin'] // Input must be equal to 'Admin'
+   *  })
+   *  validator('inclusion', {
+   *      range: [0, Infinity] // Input must be positive number
+   *  })
+   *  validator('inclusion', {
+   *      range: [-Infinity, Infinity] // Input must be a number
+   *  })
+   *  ```
+   *
+   *  @class Inclusion
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+    validate: function validate(value, options) {
+      var array = options['in'];
+      var range = options.range;
+
+      if (isEmpty(Object.keys(options))) {
+        return true;
+      }
+
+      if (options.allowBlank && isEmpty(value)) {
+        return true;
+      }
+
+      if (array && array.indexOf(value) === -1) {
+        return this.createErrorMessage('inclusion', value, options);
+      }
+
+      if (range && range.length === 2) {
+        var min = range[0];
+        var max = range[1];
+        var equalType = typeOf(value) === typeOf(min) && typeOf(value) === typeOf(max);
+
+        if (!equalType || min > value || value > max) {
+          return this.createErrorMessage('inclusion', value, options);
+        }
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/length', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var get = _ember['default'].get;
+  var isNone = _ember['default'].isNone;
+  var isEmpty = _ember['default'].isEmpty;
+
+  /**
+   *  Validates the length of the attributes’ values.
+   *
+   *   #### Options
+   *  - `allowBlank` (**Boolean**): If true, skips validation if the value is empty
+   *  - `is` (**Number**): The exact length the value can be
+   *  - `min` (**Number**): The minimum length the value can be
+   *  - `max` (**Number**): The maximum length the value can be
+   *
+   *  ```javascript
+   *  // Examples
+   *  validator('length', {
+   *    is: 15
+   *  })
+   *  validator('length', {
+   *      min: 5,
+   *      max: 10
+   *  })
+   *  ```
+   *
+   *  @class Length
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+    validate: function validate(value, options) {
+      if (isEmpty(Object.keys(options))) {
+        return true;
+      }
+
+      if (options.allowBlank && isEmpty(value)) {
+        return true;
+      }
+
+      if (isNone(value)) {
+        return true;
+      }
+
+      if (!isNone(options.is) && options.is !== get(value, 'length')) {
+        return this.createErrorMessage('wrongLength', value, options);
+      }
+
+      if (!isNone(options.min) && options.min > get(value, 'length')) {
+        return this.createErrorMessage('tooShort', value, options);
+      }
+
+      if (!isNone(options.max) && options.max < get(value, 'length')) {
+        return this.createErrorMessage('tooLong', value, options);
+      }
+
+      return true;
+    }
+  });
+});
+define('ember-cp-validations/validators/messages', ['exports', 'ember'], function (exports, _ember) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+  'use strict';
+
+  var get = _ember['default'].get;
+  var isNone = _ember['default'].isNone;
+
+  /**
+   *  The default validation error messages are imported in your app's `validators` folder.
+   *  If you want to change or extend them, all you need to do is create a `messages.js` file under `app/validators`.
+   *
+   *  ```javascript
+   *  // app/validators/messages.js
+   *
+   *  import Messages from 'ember-cp-validations/validators/messages';
+   *
+   *  export default Messages.extend({
+   *    uniqueUsername: '{description} {username} already exists'
+   *  });
+   *  ```
+   *
+   *  Within this object, you can overwrite the [default messages](https://github.com/offirgolan/ember-cp-validations/blob/master/addon/validators/messages.js) or create new messages just like in the example above.
+   *  If a message of a given type is not found, it will default to the `invalid` message.
+   *  Usage examples can be found {{#crossLink "Base/createErrorMessage:method"}}here{{/crossLink}}
+   *
+   *  @class Messages
+   *  @module Validators
+   */
+  exports['default'] = _ember['default'].Object.extend({
+
+    /**
+     * Regex for matching error message placeholders
+     * @private
+     * @property _regex
+     * @type {RegExp}
+     */
+    _regex: /\{(\w+)\}/g,
+
+    /**
+     * Default attribute description if one isnt passed into a validator's options
+     * @property defaultDescription
+     * @type {String}
+     */
+    defaultDescription: 'This field',
+
+    /**
+     * Get a description for a specific attribute. This is a hook
+     * for i18n solutions to retrieve attribute descriptions from a translation
+     * @method getDescriptionFor
+     * @param  {String} attribute
+     * @param  {Object} options
+     * @return {String}
+     */
+    getDescriptionFor: function getDescriptionFor(attribute) {
+      var options = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+
+      return options.description || get(this, 'defaultDescription');
+    },
+
+    /**
+     * Get a message with a given type
+     * @method getMessageFor
+     * @param  {String} type
+     * @param  {Object} context
+     * @return {String}
+     */
+    getMessageFor: function getMessageFor(type) {
+      var context = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+
+      return this.formatMessage(get(this, type), context);
+    },
+
+    /**
+     * Regex replace all placeholders with their given context
+     * @method formatMessage
+     * @param  {String} message
+     * @param  {Object} context
+     * @return {String}
+     */
+    formatMessage: function formatMessage(message) {
+      var context = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+
+      var m = message;
+
+      if (isNone(m) || typeof m !== 'string') {
+        m = get(this, 'invalid');
+      }
+      return m.replace(get(this, '_regex'), function (s, attr) {
+        return context[attr];
+      });
+    },
+
+    /**
+     * Default validation error message strings
+     */
+    inclusion: '{description} is not included in the list',
+    exclusion: '{description} is reserved',
+    invalid: '{description} is invalid',
+    confirmation: '{description} doesn\'t match {on}',
+    accepted: '{description} must be accepted',
+    empty: '{description} can\'t be empty',
+    blank: '{description} can\'t be blank',
+    present: '{description} must be blank',
+    collection: '{description} must be a collection',
+    singular: '{description} can\'t be a collection',
+    tooLong: '{description} is too long (maximum is {max} characters)',
+    tooShort: '{description} is too short (minimum is {min} characters)',
+    before: '{description} must be before {before}',
+    after: '{description} must be after {after}',
+    wrongDateFormat: '{description} must be in the format of {format}',
+    wrongLength: '{description} is the wrong length (should be {is} characters)',
+    notANumber: '{description} must be a number',
+    notAnInteger: '{description} must be an integer',
+    greaterThan: '{description} must be greater than {gt}',
+    greaterThanOrEqualTo: '{description} must be greater than or equal to {gte}',
+    equalTo: '{description} must be equal to {is}',
+    lessThan: '{description} must be less than {lt}',
+    lessThanOrEqualTo: '{description} must be less than or equal to {lte}',
+    otherThan: '{description} must be other than {value}',
+    odd: '{description} must be odd',
+    even: '{description} must be even',
+    positive: '{description} must be positive',
+    date: '{description} must be a valid date',
+    email: '{description} must be a valid email address',
+    phone: '{description} must be a valid phone number',
+    url: '{description} must be a valid url'
+  });
+});
+define('ember-cp-validations/validators/number', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var isEmpty = _ember['default'].isEmpty;
+
+  /**
+   *  Validates that your attributes have only numeric values.
+   *
+   *   #### Options
+   *  - `allowBlank` (**Boolean**): If true, skips validation if the value is empty
+   *  - `allowString` (**Boolean**): If true, validator will accept string representation of a number
+   *  - `integer` (**Boolean**): Number must be an integer
+   *  - `positive` (**Boolean**): Number must be greater than 0
+   *  - `odd` (**Boolean**): Number must be odd
+   *  - `even` (**Boolean**): Number must be even
+   *  - `is` (**Number**): Number must be equal to this value
+   *  - `lt` (**Number**): Number must be less than this value
+   *  - `lte` (**Number**): Number must be less than or equal to this value
+   *  - `gt` (**Number**): Number must be greater than this value
+   *  - `gte` (**Number**): Number must be greater than or equal to this value
+   *
+   *  ```javascript
+   *  // Examples
+   *  validator('number') // Simple check if the value is a number
+   *  validator('number', {
+   *      allowString: true,
+   *      integer: true,
+   *      gt: 5,
+   *      lte: 100
+   *  })
+   *  ```
+   *
+   *  @class Number
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+    validate: function validate(value, options) {
+      var numValue = Number(value);
+      var optionKeys = Object.keys(options);
+
+      if (options.allowBlank && isEmpty(value)) {
+        return true;
+      }
+
+      if (typeof value === 'string' && (isEmpty(value) || !options.allowString)) {
+        return this.createErrorMessage('notANumber', value, options);
+      }
+
+      if (!this.isNumber(numValue)) {
+        return this.createErrorMessage('notANumber', value, options);
+      }
+
+      if (options.integer && !this.isInteger(numValue)) {
+        return this.createErrorMessage('notAnInteger', value, options);
+      }
+
+      for (var i = 0; i < optionKeys.length; i++) {
+        var type = optionKeys[i];
+        var m = this._validateType(type, options, numValue);
+
+        if (typeof m === 'string') {
+          return m;
+        }
+      }
+
+      return true;
+    },
+
+    _validateType: function _validateType(type, options, value) {
+      var expected = options[type];
+      var actual = value;
+
+      if (type === 'is' && actual !== expected) {
+        return this.createErrorMessage('equalTo', value, options);
+      } else if (type === 'lt' && actual >= expected) {
+        return this.createErrorMessage('lessThan', value, options);
+      } else if (type === 'lte' && actual > expected) {
+        return this.createErrorMessage('lessThanOrEqualTo', value, options);
+      } else if (type === 'gt' && actual <= expected) {
+        return this.createErrorMessage('greaterThan', value, options);
+      } else if (type === 'gte' && actual < expected) {
+        return this.createErrorMessage('greaterThanOrEqualTo', value, options);
+      } else if (type === 'positive' && actual < 0) {
+        return this.createErrorMessage('positive', value, options);
+      } else if (type === 'odd' && actual % 2 === 0) {
+        return this.createErrorMessage('odd', value, options);
+      } else if (type === 'even' && actual % 2 !== 0) {
+        return this.createErrorMessage('even', value, options);
+      }
+
+      return true;
+    },
+
+    /* Use polyfills instead of Number.isNaN or Number.isInteger to support IE & Safari */
+
+    isNumber: function isNumber(value) {
+      return typeof value === 'number' && !isNaN(value);
+    },
+
+    isInteger: function isInteger(value) {
+      return typeof value === 'number' && isFinite(value) && Math.floor(value) === value;
+    }
+  });
+});
+define('ember-cp-validations/validators/presence', ['exports', 'ember', 'ember-cp-validations/validators/base'], function (exports, _ember, _emberCpValidationsValidatorsBase) {
+  /**
+   * Copyright 2016, Yahoo! Inc.
+   * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+   */
+
+  'use strict';
+
+  var get = _ember['default'].get;
+  var isEmpty = _ember['default'].isEmpty;
+
+  /**
+   *  If `true` validates that the given value is not empty, if `false`, validates that the given value is empty.
+   *
+   *  ```javascript
+   *  // Examples
+   *  validator('presence', true)
+   *  validator('presence', false)
+   *  validator('presence', {
+   *    presence: true,
+   *    message: 'should not be empty'
+   *  })
+   *  ```
+   *
+   *  @class Presence
+   *  @module Validators
+   *  @extends Base
+   */
+  exports['default'] = _emberCpValidationsValidatorsBase['default'].extend({
+
+    /**
+     * Normalized options passed in.
+     * ```js
+     * validator('presence', true)
+     * // Becomes
+     * validator('presence', {
+     *   presence: true
+     * })
+     * ```
+     *
+     * @method buildOptions
+     * @param  {Object}     options
+     * @param  {Object}     defaultOptions
+     * @param  {Object}     globalOptions
+     * @return {Object}
+     */
+    buildOptions: function buildOptions() {
+      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+      var defaultOptions = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+      var globalOptions = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+
+      var opts = options;
+
+      if (typeof options === 'boolean') {
+        opts = {
+          presence: options
+        };
+      }
+      return this._super(opts, defaultOptions, globalOptions);
+    },
+
+    validate: function validate(value, options) {
+      if (options.presence === true && !this._isPresent(value)) {
+        return this.createErrorMessage('blank', value, options);
+      }
+
+      if (options.presence === false && this._isPresent(value)) {
+        return this.createErrorMessage('present', value, options);
+      }
+
+      return true;
+    },
+
+    /**
+     * Handle presence of ember proxy based instances
+     */
+    _isPresent: function _isPresent(value) {
+      if (value instanceof _ember['default'].ObjectProxy || value instanceof _ember['default'].ArrayProxy) {
+        return this._isPresent(get(value, 'content'));
+      }
+      return !isEmpty(value);
+    }
+  });
+});
 define('ember-data/-private/adapters/build-url-mixin', ['exports', 'ember'], function (exports, _ember) {
   'use strict';
 
@@ -82932,6 +86282,182 @@ define("ember-data/version", ["exports"], function (exports) {
 
   exports["default"] = "2.5.2";
 });
+define('ember-getowner-polyfill/fake-owner', ['exports', 'ember'], function (exports, _ember) {
+  'use strict';
+
+  var _createClass = (function () {
+    function defineProperties(target, props) {
+      for (var i = 0; i < props.length; i++) {
+        var descriptor = props[i];descriptor.enumerable = descriptor.enumerable || false;descriptor.configurable = true;if ('value' in descriptor) descriptor.writable = true;Object.defineProperty(target, descriptor.key, descriptor);
+      }
+    }return function (Constructor, protoProps, staticProps) {
+      if (protoProps) defineProperties(Constructor.prototype, protoProps);if (staticProps) defineProperties(Constructor, staticProps);return Constructor;
+    };
+  })();
+
+  function _classCallCheck(instance, Constructor) {
+    if (!(instance instanceof Constructor)) {
+      throw new TypeError('Cannot call a class as a function');
+    }
+  }
+
+  var CONTAINER = '__' + new Date() + '_container';
+  var REGISTRY = '__' + new Date() + '_registry';
+
+  var FakeOwner = (function () {
+    function FakeOwner(object) {
+      _classCallCheck(this, FakeOwner);
+
+      this[CONTAINER] = object.container;
+
+      if (_ember['default'].Registry) {
+        // object.container._registry is used by 1.11
+        this[REGISTRY] = object.container.registry || object.container._registry;
+      } else {
+        // Ember < 1.12
+        this[REGISTRY] = object.container;
+      }
+    }
+
+    // ContainerProxyMixin methods
+    //
+    // => http://emberjs.com/api/classes/ContainerProxyMixin.html
+    //
+
+    _createClass(FakeOwner, [{
+      key: 'lookup',
+      value: function lookup() {
+        var _CONTAINER;
+
+        return (_CONTAINER = this[CONTAINER]).lookup.apply(_CONTAINER, arguments);
+      }
+    }, {
+      key: '_lookupFactory',
+      value: function _lookupFactory() {
+        var _CONTAINER2;
+
+        return (_CONTAINER2 = this[CONTAINER]).lookupFactory.apply(_CONTAINER2, arguments);
+      }
+    }, {
+      key: 'ownerInjection',
+      value: function ownerInjection() {
+        return {
+          container: this[CONTAINER]
+        };
+      }
+
+      // RegistryProxyMixin methods
+      //
+      // => http://emberjs.com/api/classes/RegistryProxyMixin.html
+      //
+    }, {
+      key: 'hasRegistration',
+      value: function hasRegistration() {
+        var _REGISTRY;
+
+        return (_REGISTRY = this[REGISTRY]).has.apply(_REGISTRY, arguments);
+      }
+    }, {
+      key: 'inject',
+      value: function inject() {
+        var _REGISTRY2;
+
+        return (_REGISTRY2 = this[REGISTRY]).injection.apply(_REGISTRY2, arguments);
+      }
+    }, {
+      key: 'register',
+      value: function register() {
+        var _REGISTRY3;
+
+        return (_REGISTRY3 = this[REGISTRY]).register.apply(_REGISTRY3, arguments);
+      }
+    }, {
+      key: 'registerOption',
+      value: function registerOption() {
+        var _REGISTRY4;
+
+        return (_REGISTRY4 = this[REGISTRY]).option.apply(_REGISTRY4, arguments);
+      }
+    }, {
+      key: 'registerOptions',
+      value: function registerOptions() {
+        var _REGISTRY5;
+
+        return (_REGISTRY5 = this[REGISTRY]).options.apply(_REGISTRY5, arguments);
+      }
+    }, {
+      key: 'registerOptionsForType',
+      value: function registerOptionsForType() {
+        var _REGISTRY6;
+
+        return (_REGISTRY6 = this[REGISTRY]).optionsForType.apply(_REGISTRY6, arguments);
+      }
+    }, {
+      key: 'registeredOption',
+      value: function registeredOption() {
+        var _REGISTRY7;
+
+        return (_REGISTRY7 = this[REGISTRY]).getOption.apply(_REGISTRY7, arguments);
+      }
+    }, {
+      key: 'registeredOptions',
+      value: function registeredOptions() {
+        var _REGISTRY8;
+
+        return (_REGISTRY8 = this[REGISTRY]).getOptions.apply(_REGISTRY8, arguments);
+      }
+    }, {
+      key: 'registeredOptionsForType',
+      value: function registeredOptionsForType(type) {
+        if (this[REGISTRY].getOptionsForType) {
+          var _REGISTRY9;
+
+          return (_REGISTRY9 = this[REGISTRY]).getOptionsForType.apply(_REGISTRY9, arguments);
+        } else {
+          // used for Ember 1.10
+          return this[REGISTRY]._typeOptions[type];
+        }
+      }
+    }, {
+      key: 'resolveRegistration',
+      value: function resolveRegistration() {
+        var _REGISTRY10;
+
+        return (_REGISTRY10 = this[REGISTRY]).resolve.apply(_REGISTRY10, arguments);
+      }
+    }, {
+      key: 'unregister',
+      value: function unregister() {
+        var _REGISTRY11;
+
+        return (_REGISTRY11 = this[REGISTRY]).unregister.apply(_REGISTRY11, arguments);
+      }
+    }]);
+
+    return FakeOwner;
+  })();
+
+  exports['default'] = FakeOwner;
+});
+define('ember-getowner-polyfill/index', ['exports', 'ember', 'ember-getowner-polyfill/fake-owner'], function (exports, _ember, _emberGetownerPolyfillFakeOwner) {
+  'use strict';
+
+  var hasGetOwner = !!_ember['default'].getOwner;
+
+  exports['default'] = function (object) {
+    var owner = undefined;
+
+    if (hasGetOwner) {
+      owner = _ember['default'].getOwner(object);
+    }
+
+    if (!owner && object.container) {
+      owner = new _emberGetownerPolyfillFakeOwner['default'](object);
+    }
+
+    return owner;
+  };
+});
 define("ember-inflector/index", ["exports", "ember", "ember-inflector/lib/system", "ember-inflector/lib/ext/string"], function (exports, _ember, _emberInflectorLibSystem, _emberInflectorLibExtString) {
   /* global define, module */
 
@@ -83976,6 +87502,97 @@ define('ember-resolver/utils/module-registry', ['exports', 'ember'], function (e
   };
 
   exports['default'] = ModuleRegistry;
+});
+define('ember-route-action-helper/-private/internals', ['exports', 'ember'], function (exports, _ember) {
+  'use strict';
+
+  var ClosureActionModule = _ember['default'].__loader.require('ember-routing-htmlbars/keywords/closure-action');
+
+  var ACTION = ClosureActionModule.ACTION;
+  exports.ACTION = ACTION;
+});
+define('ember-route-action-helper/helpers/route-action', ['exports', 'ember', 'ember-getowner-polyfill', 'ember-route-action-helper/-private/internals'], function (exports, _ember, _emberGetownerPolyfill, _emberRouteActionHelperPrivateInternals) {
+  'use strict';
+
+  function _toConsumableArray(arr) {
+    if (Array.isArray(arr)) {
+      for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) arr2[i] = arr[i];return arr2;
+    } else {
+      return Array.from(arr);
+    }
+  }
+
+  function _toArray(arr) {
+    return Array.isArray(arr) ? arr : Array.from(arr);
+  }
+
+  var emberArray = _ember['default'].A;
+  var Helper = _ember['default'].Helper;
+  var assert = _ember['default'].assert;
+  var computed = _ember['default'].computed;
+  var typeOf = _ember['default'].typeOf;
+  var get = _ember['default'].get;
+  var run = _ember['default'].run;
+
+  function getRoutes(router) {
+    return emberArray(router.router.currentHandlerInfos).mapBy('handler').reverse();
+  }
+
+  function getRouteWithAction(router, actionName) {
+    var action = undefined;
+    var handler = emberArray(getRoutes(router)).find(function (route) {
+      var actions = route.actions || route._actions;
+      action = actions[actionName];
+
+      return typeOf(action) === 'function';
+    });
+
+    return { action: action, handler: handler };
+  }
+
+  exports['default'] = Helper.extend({
+    router: computed(function () {
+      return (0, _emberGetownerPolyfill['default'])(this).lookup('router:main');
+    }).readOnly(),
+
+    compute: function compute(_ref) {
+      var _ref2 = _toArray(_ref);
+
+      var actionName = _ref2[0];
+
+      var params = _ref2.slice(1);
+
+      var router = get(this, 'router');
+      assert('[ember-route-action-helper] Unable to lookup router', router);
+
+      var action = function action() {
+        for (var _len = arguments.length, invocationArgs = Array(_len), _key = 0; _key < _len; _key++) {
+          invocationArgs[_key] = arguments[_key];
+        }
+
+        var args = params.concat(invocationArgs);
+
+        var _getRouteWithAction = getRouteWithAction(router, actionName);
+
+        var action = _getRouteWithAction.action;
+        var handler = _getRouteWithAction.handler;
+
+        assert('[ember-route-action-helper] Unable to find action ' + actionName, handler);
+
+        return run.join.apply(run, [handler, action].concat(_toConsumableArray(args)));
+      };
+
+      action[_emberRouteActionHelperPrivateInternals.ACTION] = true;
+
+      return action;
+    }
+  });
+});
+define("materialize/index", ["exports"], function (exports) {
+  /*globals Materialize : true*/
+  "use strict";
+
+  exports["default"] = Materialize;
 });
 ;/* jshint ignore:start */
 

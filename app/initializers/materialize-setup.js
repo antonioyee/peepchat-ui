@@ -1,6 +1,7 @@
-export function initialize() {
-  if ( window && window.validate_field ) {
-    window.validate_field = function () {};
+/*globals window:true*/
+export function initialize(/* application */) {
+  if (window && window.validate_field) {
+    window.validate_field = function() {};
   }
 }
 
