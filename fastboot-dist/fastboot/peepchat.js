@@ -335,7 +335,7 @@ define("peepchat/templates/application", ["exports"], function (exports) {
 /* jshint ignore:start */
 
 define('peepchat/config/environment', ['ember'], function(Ember) {
-  return { 'default': {"modulePrefix":"peepchat","environment":"development","baseURL":"/","locationType":"auto","EmberENV":{"FEATURES":{}},"APP":{"name":"peepchat","version":"0.0.0+9fc78d8d","autoboot":false},"exportApplicationGlobal":true}};
+  return { 'default': {"modulePrefix":"peepchat","environment":"development","baseURL":"/","locationType":"auto","EmberENV":{"FEATURES":{}},"APP":{"name":"peepchat","version":"0.0.0+e37b5336","autoboot":false},"exportApplicationGlobal":true}};
 });
 
 /* jshint ignore:end */
