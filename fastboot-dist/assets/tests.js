@@ -1,3 +1,12 @@
+define('peepchat/tests/adapters/application.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - adapters/application.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'adapters/application.js should pass jshint.');
+  });
+});
 define('peepchat/tests/app.jshint', ['exports'], function (exports) {
   'use strict';
 
@@ -5,6 +14,24 @@ define('peepchat/tests/app.jshint', ['exports'], function (exports) {
   QUnit.test('should pass jshint', function (assert) {
     assert.expect(1);
     assert.ok(true, 'app.js should pass jshint.');
+  });
+});
+define('peepchat/tests/authenticators/peepchat.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - authenticators/peepchat.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'authenticators/peepchat.js should pass jshint.');
+  });
+});
+define('peepchat/tests/authorizers/oauth2.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - authorizers/oauth2.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'authorizers/oauth2.js should pass jshint.');
   });
 });
 define('peepchat/tests/components/login-card.jshint', ['exports'], function (exports) {
@@ -58,6 +85,47 @@ define('peepchat/tests/helpers/destroy-app.jshint', ['exports'], function (expor
     assert.expect(1);
     assert.ok(true, 'helpers/destroy-app.js should pass jshint.');
   });
+});
+define('peepchat/tests/helpers/ember-simple-auth', ['exports', 'ember-simple-auth/authenticators/test'], function (exports, _emberSimpleAuthAuthenticatorsTest) {
+  exports.authenticateSession = authenticateSession;
+  exports.currentSession = currentSession;
+  exports.invalidateSession = invalidateSession;
+
+  var TEST_CONTAINER_KEY = 'authenticator:test';
+
+  function ensureAuthenticator(app, container) {
+    var authenticator = container.lookup(TEST_CONTAINER_KEY);
+    if (!authenticator) {
+      app.register(TEST_CONTAINER_KEY, _emberSimpleAuthAuthenticatorsTest['default']);
+    }
+  }
+
+  function authenticateSession(app, sessionData) {
+    var container = app.__container__;
+
+    var session = container.lookup('service:session');
+    ensureAuthenticator(app, container);
+    session.authenticate(TEST_CONTAINER_KEY, sessionData);
+    return wait();
+  }
+
+  ;
+
+  function currentSession(app) {
+    return app.__container__.lookup('service:session');
+  }
+
+  ;
+
+  function invalidateSession(app) {
+    var session = app.__container__.lookup('service:session');
+    if (session.get('isAuthenticated')) {
+      session.invalidate();
+    }
+    return wait();
+  }
+
+  ;
 });
 define('peepchat/tests/helpers/module-for-acceptance', ['exports', 'qunit', 'peepchat/tests/helpers/start-app', 'peepchat/tests/helpers/destroy-app'], function (exports, _qunit, _peepchatTestsHelpersStartApp, _peepchatTestsHelpersDestroyApp) {
   exports['default'] = function (name) {
@@ -200,91 +268,7 @@ define('peepchat/tests/integration/components/login-card-test', ['exports', 'emb
       };
     })()));
 
-    assert.equal(this.$().text().trim(), '');
-
-    // Template block usage:
-    this.render(Ember.HTMLBars.template((function () {
-      var child0 = (function () {
-        return {
-          meta: {
-            'fragmentReason': false,
-            'revision': 'Ember@2.5.1',
-            'loc': {
-              'source': null,
-              'start': {
-                'line': 2,
-                'column': 4
-              },
-              'end': {
-                'line': 4,
-                'column': 4
-              }
-            }
-          },
-          isEmpty: false,
-          arity: 0,
-          cachedFragment: null,
-          hasRendered: false,
-          buildFragment: function buildFragment(dom) {
-            var el0 = dom.createDocumentFragment();
-            var el1 = dom.createTextNode('      template block text\n');
-            dom.appendChild(el0, el1);
-            return el0;
-          },
-          buildRenderNodes: function buildRenderNodes() {
-            return [];
-          },
-          statements: [],
-          locals: [],
-          templates: []
-        };
-      })();
-
-      return {
-        meta: {
-          'fragmentReason': {
-            'name': 'missing-wrapper',
-            'problems': ['wrong-type']
-          },
-          'revision': 'Ember@2.5.1',
-          'loc': {
-            'source': null,
-            'start': {
-              'line': 1,
-              'column': 0
-            },
-            'end': {
-              'line': 5,
-              'column': 2
-            }
-          }
-        },
-        isEmpty: false,
-        arity: 0,
-        cachedFragment: null,
-        hasRendered: false,
-        buildFragment: function buildFragment(dom) {
-          var el0 = dom.createDocumentFragment();
-          var el1 = dom.createTextNode('\n');
-          dom.appendChild(el0, el1);
-          var el1 = dom.createComment('');
-          dom.appendChild(el0, el1);
-          var el1 = dom.createTextNode('  ');
-          dom.appendChild(el0, el1);
-          return el0;
-        },
-        buildRenderNodes: function buildRenderNodes(dom, fragment, contextualElement) {
-          var morphs = new Array(1);
-          morphs[0] = dom.createMorphAt(fragment, 1, 1, contextualElement);
-          return morphs;
-        },
-        statements: [['block', 'login-card', [], [], 0, null, ['loc', [null, [2, 4], [4, 19]]]]],
-        locals: [],
-        templates: [child0]
-      };
-    })()));
-
-    assert.equal(this.$().text().trim(), 'template block text');
+    assert.equal(this.$().text().trim().replace(/[\s\n]+/g, ''), 'LogintoPeepchatUsernamePassword');
   });
 });
 define('peepchat/tests/integration/components/login-card-test.jshint', ['exports'], function (exports) {
@@ -349,91 +333,7 @@ define('peepchat/tests/integration/components/register-card-test', ['exports', '
       };
     })()));
 
-    assert.equal(this.$().text().trim(), '');
-
-    // Template block usage:
-    this.render(Ember.HTMLBars.template((function () {
-      var child0 = (function () {
-        return {
-          meta: {
-            'fragmentReason': false,
-            'revision': 'Ember@2.5.1',
-            'loc': {
-              'source': null,
-              'start': {
-                'line': 2,
-                'column': 4
-              },
-              'end': {
-                'line': 4,
-                'column': 4
-              }
-            }
-          },
-          isEmpty: false,
-          arity: 0,
-          cachedFragment: null,
-          hasRendered: false,
-          buildFragment: function buildFragment(dom) {
-            var el0 = dom.createDocumentFragment();
-            var el1 = dom.createTextNode('      template block text\n');
-            dom.appendChild(el0, el1);
-            return el0;
-          },
-          buildRenderNodes: function buildRenderNodes() {
-            return [];
-          },
-          statements: [],
-          locals: [],
-          templates: []
-        };
-      })();
-
-      return {
-        meta: {
-          'fragmentReason': {
-            'name': 'missing-wrapper',
-            'problems': ['wrong-type']
-          },
-          'revision': 'Ember@2.5.1',
-          'loc': {
-            'source': null,
-            'start': {
-              'line': 1,
-              'column': 0
-            },
-            'end': {
-              'line': 5,
-              'column': 2
-            }
-          }
-        },
-        isEmpty: false,
-        arity: 0,
-        cachedFragment: null,
-        hasRendered: false,
-        buildFragment: function buildFragment(dom) {
-          var el0 = dom.createDocumentFragment();
-          var el1 = dom.createTextNode('\n');
-          dom.appendChild(el0, el1);
-          var el1 = dom.createComment('');
-          dom.appendChild(el0, el1);
-          var el1 = dom.createTextNode('  ');
-          dom.appendChild(el0, el1);
-          return el0;
-        },
-        buildRenderNodes: function buildRenderNodes(dom, fragment, contextualElement) {
-          var morphs = new Array(1);
-          morphs[0] = dom.createMorphAt(fragment, 1, 1, contextualElement);
-          return morphs;
-        },
-        statements: [['block', 'register-card', [], [], 0, null, ['loc', [null, [2, 4], [4, 22]]]]],
-        locals: [],
-        templates: [child0]
-      };
-    })()));
-
-    assert.equal(this.$().text().trim(), 'template block text');
+    assert.equal(this.$().text().trim().replace(/[\s\n]+/g, ''), 'RegisterwithPeepchatUsernamePasswordConfirmPassword');
   });
 });
 define('peepchat/tests/integration/components/register-card-test.jshint', ['exports'], function (exports) {
@@ -743,6 +643,15 @@ define('peepchat/tests/integration/components/x-input-test.jshint', ['exports'],
     assert.ok(true, 'integration/components/x-input-test.js should pass jshint.');
   });
 });
+define('peepchat/tests/models/user.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - models/user.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'models/user.js should pass jshint.');
+  });
+});
 define('peepchat/tests/resolver.jshint', ['exports'], function (exports) {
   'use strict';
 
@@ -759,6 +668,24 @@ define('peepchat/tests/router.jshint', ['exports'], function (exports) {
   QUnit.test('should pass jshint', function (assert) {
     assert.expect(1);
     assert.ok(true, 'router.js should pass jshint.');
+  });
+});
+define('peepchat/tests/routes/app.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - routes/app.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'routes/app.js should pass jshint.');
+  });
+});
+define('peepchat/tests/routes/application.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - routes/application.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'routes/application.js should pass jshint.');
   });
 });
 define('peepchat/tests/routes/auth/login.jshint', ['exports'], function (exports) {
@@ -779,6 +706,33 @@ define('peepchat/tests/routes/auth/register.jshint', ['exports'], function (expo
     assert.ok(true, 'routes/auth/register.js should pass jshint.');
   });
 });
+define('peepchat/tests/routes/auth.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - routes/auth.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'routes/auth.js should pass jshint.');
+  });
+});
+define('peepchat/tests/routes/index.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - routes/index.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'routes/index.js should pass jshint.');
+  });
+});
+define('peepchat/tests/session-stores/application.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - session-stores/application.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'session-stores/application.js should pass jshint.');
+  });
+});
 define('peepchat/tests/test-helper', ['exports', 'peepchat/tests/helpers/resolver', 'ember-qunit'], function (exports, _peepchatTestsHelpersResolver, _emberQunit) {
 
   (0, _emberQunit.setResolver)(_peepchatTestsHelpersResolver['default']);
@@ -790,6 +744,28 @@ define('peepchat/tests/test-helper.jshint', ['exports'], function (exports) {
   QUnit.test('should pass jshint', function (assert) {
     assert.expect(1);
     assert.ok(true, 'test-helper.js should pass jshint.');
+  });
+});
+define('peepchat/tests/unit/adapters/application-test', ['exports', 'ember-qunit'], function (exports, _emberQunit) {
+
+  (0, _emberQunit.moduleFor)('adapter:application', 'Unit | Adapter | application', {
+    // Specify the other units that are required for this test.
+    // needs: ['serializer:foo']
+  });
+
+  // Replace this with your real tests.
+  (0, _emberQunit.test)('it exists', function (assert) {
+    var adapter = this.subject();
+    assert.ok(adapter);
+  });
+});
+define('peepchat/tests/unit/adapters/application-test.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - unit/adapters/application-test.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'unit/adapters/application-test.js should pass jshint.');
   });
 });
 define('peepchat/tests/unit/initializers/materialize-setup-test', ['exports', 'ember', 'peepchat/initializers/materialize-setup', 'qunit'], function (exports, _ember, _peepchatInitializersMaterializeSetup, _qunit) {
@@ -820,6 +796,70 @@ define('peepchat/tests/unit/initializers/materialize-setup-test.jshint', ['expor
   QUnit.test('should pass jshint', function (assert) {
     assert.expect(1);
     assert.ok(true, 'unit/initializers/materialize-setup-test.js should pass jshint.');
+  });
+});
+define('peepchat/tests/unit/models/user-test', ['exports', 'ember-qunit'], function (exports, _emberQunit) {
+
+  (0, _emberQunit.moduleForModel)('user', 'Unit | Model | user', {
+    // Specify the other units that are required for this test.
+    needs: []
+  });
+
+  (0, _emberQunit.test)('it exists', function (assert) {
+    var model = this.subject();
+    // let store = this.store();
+    assert.ok(!!model);
+  });
+});
+define('peepchat/tests/unit/models/user-test.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - unit/models/user-test.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'unit/models/user-test.js should pass jshint.');
+  });
+});
+define('peepchat/tests/unit/routes/app-test', ['exports', 'ember-qunit'], function (exports, _emberQunit) {
+
+  (0, _emberQunit.moduleFor)('route:app', 'Unit | Route | app', {
+    // Specify the other units that are required for this test.
+    // needs: ['controller:foo']
+  });
+
+  (0, _emberQunit.test)('it exists', function (assert) {
+    var route = this.subject();
+    assert.ok(route);
+  });
+});
+define('peepchat/tests/unit/routes/app-test.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - unit/routes/app-test.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'unit/routes/app-test.js should pass jshint.');
+  });
+});
+define('peepchat/tests/unit/routes/application-test', ['exports', 'ember-qunit'], function (exports, _emberQunit) {
+
+  (0, _emberQunit.moduleFor)('route:application', 'Unit | Route | application', {
+    // Specify the other units that are required for this test.
+    needs: ['service:session']
+  });
+
+  (0, _emberQunit.test)('it exists', function (assert) {
+    var route = this.subject();
+    assert.ok(route);
+  });
+});
+define('peepchat/tests/unit/routes/application-test.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - unit/routes/application-test.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'unit/routes/application-test.js should pass jshint.');
   });
 });
 define('peepchat/tests/unit/routes/auth/login-test', ['exports', 'ember-qunit'], function (exports, _emberQunit) {
@@ -862,6 +902,77 @@ define('peepchat/tests/unit/routes/auth/register-test.jshint', ['exports'], func
   QUnit.test('should pass jshint', function (assert) {
     assert.expect(1);
     assert.ok(true, 'unit/routes/auth/register-test.js should pass jshint.');
+  });
+});
+define('peepchat/tests/unit/routes/auth-test', ['exports', 'ember-qunit'], function (exports, _emberQunit) {
+
+  (0, _emberQunit.moduleFor)('route:auth', 'Unit | Route | auth', {
+    // Specify the other units that are required for this test.
+    // needs: ['controller:foo']
+  });
+
+  (0, _emberQunit.test)('it exists', function (assert) {
+    var route = this.subject();
+    assert.ok(route);
+  });
+});
+define('peepchat/tests/unit/routes/auth-test.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - unit/routes/auth-test.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'unit/routes/auth-test.js should pass jshint.');
+  });
+});
+define('peepchat/tests/unit/routes/index-test', ['exports', 'ember-qunit'], function (exports, _emberQunit) {
+
+  (0, _emberQunit.moduleFor)('route:index', 'Unit | Route | index', {
+    // Specify the other units that are required for this test.
+    // needs: ['controller:foo']
+  });
+
+  (0, _emberQunit.test)('it exists', function (assert) {
+    var route = this.subject();
+    assert.ok(route);
+  });
+});
+define('peepchat/tests/unit/routes/index-test.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - unit/routes/index-test.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'unit/routes/index-test.js should pass jshint.');
+  });
+});
+define('peepchat/tests/unit/utils/user-validations-test', ['exports', 'peepchat/utils/user-validations', 'qunit'], function (exports, _peepchatUtilsUserValidations, _qunit) {
+
+  (0, _qunit.module)('Unit | Utility | user validations');
+
+  // Replace this with your real tests.
+  (0, _qunit.test)('it works', function (assert) {
+    assert.ok(_peepchatUtilsUserValidations.email);
+    assert.ok(_peepchatUtilsUserValidations.password);
+    assert.ok(_peepchatUtilsUserValidations.passwordConfirmation);
+  });
+});
+define('peepchat/tests/unit/utils/user-validations-test.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - unit/utils/user-validations-test.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'unit/utils/user-validations-test.js should pass jshint.');
+  });
+});
+define('peepchat/tests/utils/user-validations.jshint', ['exports'], function (exports) {
+  'use strict';
+
+  QUnit.module('JSHint - utils/user-validations.js');
+  QUnit.test('should pass jshint', function (assert) {
+    assert.expect(1);
+    assert.ok(true, 'utils/user-validations.js should pass jshint.');
   });
 });
 /* jshint ignore:start */

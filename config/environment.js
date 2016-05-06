@@ -20,6 +20,15 @@ module.exports = function(environment) {
     DS: {
       host: 'http://localhost:4000',
       namespace: 'api'
+    },
+    'ember-simple-auth': {
+      authenticationRoute: 'auth.login',
+      routeIfAlreadyAuthenticated: 'app.index',
+      routeAfterAuthentication: 'app.index'
+    },
+    flashMessageDefaults: {
+      timeout: 3000,
+      extendedTimeout: 375
     }
   };
 
@@ -44,7 +53,7 @@ module.exports = function(environment) {
   }
 
   if (environment === 'production') {
-    ENV.DS.host = 'https://calm-dusk-86563.herokuapp.com';
+    ENV.DS.host = 'https://agile-springs-48591.herokuapp.com/';
   }
 
   return ENV;

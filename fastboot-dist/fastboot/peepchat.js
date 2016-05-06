@@ -6,6 +6,23 @@
 
 /* jshint ignore:end */
 
+define('peepchat/adapters/application', ['exports', 'ember-data/adapters/json-api', 'ember-simple-auth/mixins/data-adapter-mixin', 'peepchat/config/environment'], function (exports, _emberDataAdaptersJsonApi, _emberSimpleAuthMixinsDataAdapterMixin, _peepchatConfigEnvironment) {
+  exports['default'] = _emberDataAdaptersJsonApi['default'].extend(_emberSimpleAuthMixinsDataAdapterMixin['default'], {
+    host: _peepchatConfigEnvironment['default'].DS.host,
+    namespace: _peepchatConfigEnvironment['default'].DS.namespace,
+    authorizer: 'authorizer:oauth2',
+
+    urlForCreateRecord: function urlForCreateRecord(modelName) {
+      switch (modelName) {
+        case 'user':
+        case 'users':
+          return this._super.apply(this, arguments).replace('users', 'register');
+        default:
+          return this._super.apply(this, arguments);
+      }
+    }
+  });
+});
 define('peepchat/app', ['exports', 'ember', 'peepchat/resolver', 'ember-load-initializers', 'peepchat/config/environment'], function (exports, _ember, _peepchatResolver, _emberLoadInitializers, _peepchatConfigEnvironment) {
 
   var App = undefined;
@@ -22,6 +39,14 @@ define('peepchat/app', ['exports', 'ember', 'peepchat/resolver', 'ember-load-ini
 
   exports['default'] = App;
 });
+define('peepchat/authenticators/peepchat', ['exports', 'ember-simple-auth/authenticators/oauth2-password-grant', 'peepchat/config/environment'], function (exports, _emberSimpleAuthAuthenticatorsOauth2PasswordGrant, _peepchatConfigEnvironment) {
+  exports['default'] = _emberSimpleAuthAuthenticatorsOauth2PasswordGrant['default'].extend({
+    serverTokenEndpoint: _peepchatConfigEnvironment['default'].DS.host + '/' + _peepchatConfigEnvironment['default'].DS.namespace + '/token'
+  });
+});
+define('peepchat/authorizers/oauth2', ['exports', 'ember-simple-auth/authorizers/oauth2-bearer'], function (exports, _emberSimpleAuthAuthorizersOauth2Bearer) {
+  exports['default'] = _emberSimpleAuthAuthorizersOauth2Bearer['default'].extend();
+});
 define('peepchat/components/app-version', ['exports', 'ember-cli-app-version/components/app-version', 'peepchat/config/environment'], function (exports, _emberCliAppVersionComponentsAppVersion, _peepchatConfigEnvironment) {
 
   var name = _peepchatConfigEnvironment['default'].APP.name;
@@ -32,11 +57,24 @@ define('peepchat/components/app-version', ['exports', 'ember-cli-app-version/com
     name: name
   });
 });
-define('peepchat/components/login-card', ['exports', 'ember'], function (exports, _ember) {
-  exports['default'] = _ember['default'].Component.extend({});
+define('peepchat/components/login-card', ['exports', 'ember', 'peepchat/utils/user-validations', 'ember-cp-validations'], function (exports, _ember, _peepchatUtilsUserValidations, _emberCpValidations) {
+
+  var Validations = (0, _emberCpValidations.buildValidations)({
+    'model.email': _peepchatUtilsUserValidations.email,
+    'model.password': _peepchatUtilsUserValidations.password
+  });
+
+  exports['default'] = _ember['default'].Component.extend(Validations, {});
 });
-define('peepchat/components/register-card', ['exports', 'ember'], function (exports, _ember) {
-  exports['default'] = _ember['default'].Component.extend({});
+define('peepchat/components/register-card', ['exports', 'ember', 'peepchat/utils/user-validations', 'ember-cp-validations'], function (exports, _ember, _peepchatUtilsUserValidations, _emberCpValidations) {
+
+  var Validations = (0, _emberCpValidations.buildValidations)({
+    'model.email': _peepchatUtilsUserValidations.email,
+    'model.password': _peepchatUtilsUserValidations.password,
+    'model.passwordConfirmation': _peepchatUtilsUserValidations.passwordConfirmation
+  });
+
+  exports['default'] = _ember['default'].Component.extend(Validations, {});
 });
 define('peepchat/components/x-card', ['exports', 'ember'], function (exports, _ember) {
   exports['default'] = _ember['default'].Component.extend({
@@ -136,6 +174,19 @@ define('peepchat/initializers/ember-data', ['exports', 'ember-data/setup-contain
   exports['default'] = {
     name: 'ember-data',
     initialize: _emberDataSetupContainer['default']
+  };
+});
+define('peepchat/initializers/ember-simple-auth', ['exports', 'ember', 'peepchat/config/environment', 'ember-simple-auth/configuration', 'ember-simple-auth/initializers/setup-session', 'ember-simple-auth/initializers/setup-session-service'], function (exports, _ember, _peepchatConfigEnvironment, _emberSimpleAuthConfiguration, _emberSimpleAuthInitializersSetupSession, _emberSimpleAuthInitializersSetupSessionService) {
+  exports['default'] = {
+    name: 'ember-simple-auth',
+    initialize: function initialize(registry) {
+      var config = _peepchatConfigEnvironment['default']['ember-simple-auth'] || {};
+      config.baseURL = _peepchatConfigEnvironment['default'].baseURL;
+      _emberSimpleAuthConfiguration['default'].load(config);
+
+      (0, _emberSimpleAuthInitializersSetupSession['default'])(registry);
+      (0, _emberSimpleAuthInitializersSetupSessionService['default'])(registry);
+    }
   };
 });
 define('peepchat/initializers/export-application-global', ['exports', 'ember', 'peepchat/config/environment'], function (exports, _ember, _peepchatConfigEnvironment) {
@@ -273,6 +324,21 @@ define("peepchat/instance-initializers/ember-data", ["exports", "ember-data/-pri
     initialize: _emberDataPrivateInstanceInitializersInitializeStoreService["default"]
   };
 });
+define('peepchat/instance-initializers/ember-simple-auth', ['exports', 'ember-simple-auth/instance-initializers/setup-session-restoration'], function (exports, _emberSimpleAuthInstanceInitializersSetupSessionRestoration) {
+  exports['default'] = {
+    name: 'ember-simple-auth',
+    initialize: function initialize(instance) {
+      (0, _emberSimpleAuthInstanceInitializersSetupSessionRestoration['default'])(instance);
+    }
+  };
+});
+define('peepchat/models/user', ['exports', 'ember-data/model', 'ember-data/attr'], function (exports, _emberDataModel, _emberDataAttr) {
+  exports['default'] = _emberDataModel['default'].extend({
+    email: (0, _emberDataAttr['default'])('string'),
+    password: (0, _emberDataAttr['default'])('string'),
+    passwordConfirmation: (0, _emberDataAttr['default'])('string')
+  });
+});
 define('peepchat/resolver', ['exports', 'ember-resolver'], function (exports, _emberResolver) {
   exports['default'] = _emberResolver['default'];
 });
@@ -287,14 +353,72 @@ define('peepchat/router', ['exports', 'ember', 'peepchat/config/environment'], f
       this.route('login');
       this.route('register');
     });
+    this.route('app');
   });
 
   exports['default'] = Router;
 });
+define('peepchat/routes/app', ['exports', 'ember'], function (exports, _ember) {
+  exports['default'] = _ember['default'].Route.extend({
+    session: _ember['default'].indect.service(),
+    beforeModel: function beforeModel() {
+      if (!this.get('session').get('isAuthenticated')) {
+        this.transitionTo('auth.login');
+      }
+    }
+  });
+});
+define('peepchat/routes/application', ['exports', 'ember', 'ember-simple-auth/mixins/application-route-mixin'], function (exports, _ember, _emberSimpleAuthMixinsApplicationRouteMixin) {
+  exports['default'] = _ember['default'].Route.extend(_emberSimpleAuthMixinsApplicationRouteMixin['default'], {
+    actions: {
+      logout: function logout() {
+        this.get('session').invalidate();
+      }
+    }
+  });
+});
 define('peepchat/routes/auth/login', ['exports', 'ember'], function (exports, _ember) {
-  exports['default'] = _ember['default'].Route.extend({});
+  exports['default'] = _ember['default'].Route.extend({
+    actions: {
+      doLogin: function doLogin() {
+        alert('login attempted');
+      }
+    },
+    model: function model() {
+      return {
+        email: '',
+        password: ''
+      };
+    }
+  });
 });
 define('peepchat/routes/auth/register', ['exports', 'ember'], function (exports, _ember) {
+  exports['default'] = _ember['default'].Route.extend({
+    actions: {
+      doRegister: function doRegister() {
+        var _this = this;
+
+        this.get('currentModel').save().then(function () {
+          _this.transitionTo('auth.login');
+        });
+      }
+    },
+    model: function model() {
+      return this.store.createRecord('user');
+    }
+  });
+});
+define('peepchat/routes/auth', ['exports', 'ember'], function (exports, _ember) {
+  exports['default'] = _ember['default'].Route.extend({
+    session: _ember['default'].inject.service(),
+    beforeModel: function beforeModel() {
+      if (this.get('session').get('isAuthenticated')) {
+        this.transitionTo('app.index');
+      }
+    }
+  });
+});
+define('peepchat/routes/index', ['exports', 'ember'], function (exports, _ember) {
   exports['default'] = _ember['default'].Route.extend({});
 });
 define('peepchat/services/ajax', ['exports', 'ember-ajax/services/ajax'], function (exports, _emberAjaxServicesAjax) {
@@ -304,6 +428,9 @@ define('peepchat/services/ajax', ['exports', 'ember-ajax/services/ajax'], functi
       return _emberAjaxServicesAjax['default'];
     }
   });
+});
+define('peepchat/services/cookies', ['exports', 'ember-cookies/services/cookies'], function (exports, _emberCookiesServicesCookies) {
+  exports['default'] = _emberCookiesServicesCookies['default'];
 });
 define('peepchat/services/fastboot', ['exports', 'ember'], function (exports, _ember) {
 
@@ -322,6 +449,58 @@ define('peepchat/services/fastboot', ['exports', 'ember'], function (exports, _e
   });
 });
 /* global FastBoot */
+define('peepchat/services/session', ['exports', 'ember-simple-auth/services/session'], function (exports, _emberSimpleAuthServicesSession) {
+  exports['default'] = _emberSimpleAuthServicesSession['default'];
+});
+define('peepchat/session-stores/application', ['exports', 'ember-simple-auth/session-stores/cookie'], function (exports, _emberSimpleAuthSessionStoresCookie) {
+  exports['default'] = _emberSimpleAuthSessionStoresCookie['default'].extend();
+});
+define("peepchat/templates/app", ["exports"], function (exports) {
+  exports["default"] = Ember.HTMLBars.template((function () {
+    return {
+      meta: {
+        "fragmentReason": {
+          "name": "missing-wrapper",
+          "problems": ["wrong-type"]
+        },
+        "revision": "Ember@2.5.1",
+        "loc": {
+          "source": null,
+          "start": {
+            "line": 1,
+            "column": 0
+          },
+          "end": {
+            "line": 2,
+            "column": 0
+          }
+        },
+        "moduleName": "peepchat/templates/app.hbs"
+      },
+      isEmpty: false,
+      arity: 0,
+      cachedFragment: null,
+      hasRendered: false,
+      buildFragment: function buildFragment(dom) {
+        var el0 = dom.createDocumentFragment();
+        var el1 = dom.createComment("");
+        dom.appendChild(el0, el1);
+        var el1 = dom.createTextNode("\n");
+        dom.appendChild(el0, el1);
+        return el0;
+      },
+      buildRenderNodes: function buildRenderNodes(dom, fragment, contextualElement) {
+        var morphs = new Array(1);
+        morphs[0] = dom.createMorphAt(fragment, 0, 0, contextualElement);
+        dom.insertBoundary(fragment, 0);
+        return morphs;
+      },
+      statements: [["content", "outlet", ["loc", [null, [1, 0], [1, 10]]]]],
+      locals: [],
+      templates: []
+    };
+  })());
+});
 define("peepchat/templates/application", ["exports"], function (exports) {
   exports["default"] = Ember.HTMLBars.template((function () {
     return {
@@ -383,7 +562,7 @@ define("peepchat/templates/auth/login", ["exports"], function (exports) {
             "column": 0
           },
           "end": {
-            "line": 8,
+            "line": 10,
             "column": 0
           }
         },
@@ -427,13 +606,78 @@ define("peepchat/templates/auth/login", ["exports"], function (exports) {
         morphs[0] = dom.createMorphAt(dom.childAt(fragment, [0, 1, 1]), 1, 1);
         return morphs;
       },
-      statements: [["inline", "login-card", [], ["onsubmit", ["subexpr", "route-action", ["doLogin"], [], ["loc", [null, [4, 28], [4, 52]]]]], ["loc", [null, [4, 6], [4, 54]]]]],
+      statements: [["inline", "login-card", [], ["model", ["subexpr", "@mut", [["get", "model", ["loc", [null, [5, 14], [5, 19]]]]], [], []], "onsubmit", ["subexpr", "route-action", ["doLogin"], [], ["loc", [null, [6, 17], [6, 41]]]]], ["loc", [null, [4, 6], [6, 43]]]]],
       locals: [],
       templates: []
     };
   })());
 });
 define("peepchat/templates/auth/register", ["exports"], function (exports) {
+  exports["default"] = Ember.HTMLBars.template((function () {
+    return {
+      meta: {
+        "fragmentReason": {
+          "name": "triple-curlies"
+        },
+        "revision": "Ember@2.5.1",
+        "loc": {
+          "source": null,
+          "start": {
+            "line": 1,
+            "column": 0
+          },
+          "end": {
+            "line": 10,
+            "column": 0
+          }
+        },
+        "moduleName": "peepchat/templates/auth/register.hbs"
+      },
+      isEmpty: false,
+      arity: 0,
+      cachedFragment: null,
+      hasRendered: false,
+      buildFragment: function buildFragment(dom) {
+        var el0 = dom.createDocumentFragment();
+        var el1 = dom.createElement("div");
+        dom.setAttribute(el1, "class", "container");
+        var el2 = dom.createTextNode("\n  ");
+        dom.appendChild(el1, el2);
+        var el2 = dom.createElement("div");
+        dom.setAttribute(el2, "class", "row");
+        var el3 = dom.createTextNode("\n    ");
+        dom.appendChild(el2, el3);
+        var el3 = dom.createElement("div");
+        dom.setAttribute(el3, "class", "col s12 m8 offset-m2");
+        var el4 = dom.createTextNode("\n      ");
+        dom.appendChild(el3, el4);
+        var el4 = dom.createComment("");
+        dom.appendChild(el3, el4);
+        var el4 = dom.createTextNode("\n    ");
+        dom.appendChild(el3, el4);
+        dom.appendChild(el2, el3);
+        var el3 = dom.createTextNode("\n  ");
+        dom.appendChild(el2, el3);
+        dom.appendChild(el1, el2);
+        var el2 = dom.createTextNode("\n");
+        dom.appendChild(el1, el2);
+        dom.appendChild(el0, el1);
+        var el1 = dom.createTextNode("\n");
+        dom.appendChild(el0, el1);
+        return el0;
+      },
+      buildRenderNodes: function buildRenderNodes(dom, fragment, contextualElement) {
+        var morphs = new Array(1);
+        morphs[0] = dom.createMorphAt(dom.childAt(fragment, [0, 1, 1]), 1, 1);
+        return morphs;
+      },
+      statements: [["inline", "register-card", [], ["model", ["subexpr", "@mut", [["get", "model", ["loc", [null, [5, 14], [5, 19]]]]], [], []], "onsubmit", ["subexpr", "route-action", ["doRegister"], [], ["loc", [null, [6, 17], [6, 44]]]]], ["loc", [null, [4, 6], [6, 46]]]]],
+      locals: [],
+      templates: []
+    };
+  })());
+});
+define("peepchat/templates/auth", ["exports"], function (exports) {
   exports["default"] = Ember.HTMLBars.template((function () {
     return {
       meta: {
@@ -453,7 +697,7 @@ define("peepchat/templates/auth/register", ["exports"], function (exports) {
             "column": 0
           }
         },
-        "moduleName": "peepchat/templates/auth/register.hbs"
+        "moduleName": "peepchat/templates/auth.hbs"
       },
       isEmpty: false,
       arity: 0,
@@ -496,7 +740,7 @@ define("peepchat/templates/components/login-card", ["exports"], function (export
               "column": 0
             },
             "end": {
-              "line": 8,
+              "line": 22,
               "column": 0
             }
           },
@@ -540,7 +784,7 @@ define("peepchat/templates/components/login-card", ["exports"], function (export
           morphs[1] = dom.createMorphAt(dom.childAt(fragment, [3]), 1, 1);
           return morphs;
         },
-        statements: [["inline", "x-input", [], ["classNames", "col s12", "type", "email", "label", "Username"], ["loc", [null, [3, 4], [3, 66]]]], ["inline", "x-input", [], ["classNames", "col s12", "type", "password", "label", "Password"], ["loc", [null, [6, 4], [6, 69]]]]],
+        statements: [["inline", "x-input", [], ["value", ["subexpr", "@mut", [["get", "model.email", ["loc", [null, [8, 12], [8, 23]]]]], [], []], "errors", ["subexpr", "get", [["subexpr", "get", [["get", "model.validations.attrs", []], "email"], [], []], "messages"], [], ["loc", [null, [9, 13], [9, 45]]]], "classNames", "col s12", "type", "email", "label", "Username"], ["loc", [null, [7, 4], [12, 24]]]], ["inline", "x-input", [], ["value", ["subexpr", "@mut", [["get", "model.password", ["loc", [null, [16, 12], [16, 26]]]]], [], []], "errors", ["subexpr", "get", [["subexpr", "get", [["get", "model.validations.attrs", []], "password"], [], []], "messages"], [], ["loc", [null, [17, 13], [17, 48]]]], "classNames", "col s12", "type", "password", "label", "Password"], ["loc", [null, [15, 4], [20, 24]]]]],
         locals: [],
         templates: []
       };
@@ -559,7 +803,7 @@ define("peepchat/templates/components/login-card", ["exports"], function (export
             "column": 0
           },
           "end": {
-            "line": 9,
+            "line": 23,
             "column": 0
           }
         },
@@ -582,7 +826,7 @@ define("peepchat/templates/components/login-card", ["exports"], function (export
         dom.insertBoundary(fragment, null);
         return morphs;
       },
-      statements: [["block", "x-card", [], ["onsubmit", ["subexpr", "@mut", [["get", "attrs.onsubmit", ["loc", [null, [1, 19], [1, 33]]]]], [], []], "title", "Login to Peepchat", "buttonText", "Login"], 0, null, ["loc", [null, [1, 0], [8, 11]]]]],
+      statements: [["block", "x-card", [], ["onsubmit", ["subexpr", "@mut", [["get", "attrs.onsubmit", ["loc", [null, [2, 11], [2, 25]]]]], [], []], "title", "Login to Peepchat", "buttonText", "Login", "buttonDisabled", ["subexpr", "@mut", [["get", "validations.messages.length", ["loc", [null, [5, 17], [5, 44]]]]], [], []]], 0, null, ["loc", [null, [1, 0], [22, 11]]]]],
       locals: [],
       templates: [child0]
     };
@@ -605,7 +849,7 @@ define("peepchat/templates/components/register-card", ["exports"], function (exp
               "column": 0
             },
             "end": {
-              "line": 11,
+              "line": 30,
               "column": 0
             }
           },
@@ -661,7 +905,7 @@ define("peepchat/templates/components/register-card", ["exports"], function (exp
           morphs[2] = dom.createMorphAt(dom.childAt(fragment, [5]), 1, 1);
           return morphs;
         },
-        statements: [["inline", "x-input", [], ["classNames", "col s12", "type", "email", "label", "Username"], ["loc", [null, [3, 4], [3, 66]]]], ["inline", "x-input", [], ["classNames", "col s12", "type", "password", "label", "Password"], ["loc", [null, [6, 4], [6, 69]]]], ["inline", "x-input", [], ["classNames", "col s12", "type", "password", "label", "Confirm Password"], ["loc", [null, [9, 4], [9, 77]]]]],
+        statements: [["inline", "x-input", [], ["value", ["subexpr", "@mut", [["get", "model.email", ["loc", [null, [8, 12], [8, 23]]]]], [], []], "errors", ["subexpr", "get", [["subexpr", "get", [["get", "model.validations.attrs", []], "email"], [], []], "messages"], [], ["loc", [null, [9, 13], [9, 45]]]], "classNames", "col s12", "type", "email", "label", "Username"], ["loc", [null, [7, 4], [12, 24]]]], ["inline", "x-input", [], ["value", ["subexpr", "@mut", [["get", "model.password", ["loc", [null, [16, 12], [16, 26]]]]], [], []], "errors", ["subexpr", "get", [["subexpr", "get", [["get", "model.validations.attrs", []], "password"], [], []], "messages"], [], ["loc", [null, [17, 13], [17, 48]]]], "classNames", "col s12", "type", "password", "label", "Password"], ["loc", [null, [15, 4], [20, 24]]]], ["inline", "x-input", [], ["value", ["subexpr", "@mut", [["get", "model.passwordConfirmation", ["loc", [null, [24, 12], [24, 38]]]]], [], []], "errors", ["subexpr", "get", [["subexpr", "get", [["get", "model.validations.attrs", []], "passwordConfirmation"], [], []], "messages"], [], ["loc", [null, [25, 13], [25, 60]]]], "classNames", "col s12", "type", "password", "label", "Confirm Password"], ["loc", [null, [23, 4], [28, 32]]]]],
         locals: [],
         templates: []
       };
@@ -680,7 +924,7 @@ define("peepchat/templates/components/register-card", ["exports"], function (exp
             "column": 0
           },
           "end": {
-            "line": 12,
+            "line": 31,
             "column": 0
           }
         },
@@ -703,7 +947,7 @@ define("peepchat/templates/components/register-card", ["exports"], function (exp
         dom.insertBoundary(fragment, null);
         return morphs;
       },
-      statements: [["block", "x-card", [], ["onsubmit", ["subexpr", "@mut", [["get", "attrs.onsubmit", ["loc", [null, [1, 19], [1, 33]]]]], [], []], "title", "Register with Peepchat", "buttonText", "Register"], 0, null, ["loc", [null, [1, 0], [11, 11]]]]],
+      statements: [["block", "x-card", [], ["onsubmit", ["subexpr", "@mut", [["get", "attrs.onsubmit", ["loc", [null, [2, 11], [2, 25]]]]], [], []], "title", "Register with Peepchat", "buttonText", "Register", "buttonDisabled", ["subexpr", "@mut", [["get", "validations.messages.length", ["loc", [null, [5, 17], [5, 44]]]]], [], []]], 0, null, ["loc", [null, [1, 0], [30, 11]]]]],
       locals: [],
       templates: [child0]
     };
@@ -941,6 +1185,148 @@ define("peepchat/templates/components/x-input", ["exports"], function (exports) 
     };
   })());
 });
+define("peepchat/templates/index", ["exports"], function (exports) {
+  exports["default"] = Ember.HTMLBars.template((function () {
+    return {
+      meta: {
+        "fragmentReason": {
+          "name": "triple-curlies"
+        },
+        "revision": "Ember@2.5.1",
+        "loc": {
+          "source": null,
+          "start": {
+            "line": 1,
+            "column": 0
+          },
+          "end": {
+            "line": 23,
+            "column": 0
+          }
+        },
+        "moduleName": "peepchat/templates/index.hbs"
+      },
+      isEmpty: false,
+      arity: 0,
+      cachedFragment: null,
+      hasRendered: false,
+      buildFragment: function buildFragment(dom) {
+        var el0 = dom.createDocumentFragment();
+        var el1 = dom.createElement("div");
+        dom.setAttribute(el1, "class", "container");
+        var el2 = dom.createTextNode("\n  ");
+        dom.appendChild(el1, el2);
+        var el2 = dom.createElement("div");
+        dom.setAttribute(el2, "class", "row");
+        var el3 = dom.createTextNode("\n    ");
+        dom.appendChild(el2, el3);
+        var el3 = dom.createElement("div");
+        dom.setAttribute(el3, "class", "col s12 m8 offset-m2");
+        var el4 = dom.createTextNode("\n      ");
+        dom.appendChild(el3, el4);
+        var el4 = dom.createElement("div");
+        dom.setAttribute(el4, "class", "card");
+        var el5 = dom.createTextNode("\n        ");
+        dom.appendChild(el4, el5);
+        var el5 = dom.createElement("div");
+        dom.setAttribute(el5, "class", "card-content");
+        var el6 = dom.createTextNode("\n          ");
+        dom.appendChild(el5, el6);
+        var el6 = dom.createElement("span");
+        dom.setAttribute(el6, "class", "card-title");
+        var el7 = dom.createTextNode(" Welcome to Peepchat!");
+        dom.appendChild(el6, el7);
+        dom.appendChild(el5, el6);
+        var el6 = dom.createTextNode("\n          ");
+        dom.appendChild(el5, el6);
+        var el6 = dom.createElement("p");
+        var el7 = dom.createTextNode("This is an example of a server-side rendered\n            ");
+        dom.appendChild(el6, el7);
+        var el7 = dom.createElement("a");
+        dom.setAttribute(el7, "href", "http://emberjs.com");
+        dom.setAttribute(el7, "target", "_blank");
+        var el8 = dom.createTextNode("Ember.js");
+        dom.appendChild(el7, el8);
+        dom.appendChild(el6, el7);
+        var el7 = dom.createTextNode(" app\n            with a\n            ");
+        dom.appendChild(el6, el7);
+        var el7 = dom.createElement("a");
+        dom.setAttribute(el7, "href", "http://www.phoenixframework.org/");
+        dom.setAttribute(el7, "target", "_blank");
+        var el8 = dom.createTextNode("\n              Phoenix\n            ");
+        dom.appendChild(el7, el8);
+        dom.appendChild(el6, el7);
+        var el7 = dom.createTextNode(" API.\n          ");
+        dom.appendChild(el6, el7);
+        dom.appendChild(el5, el6);
+        var el6 = dom.createTextNode("\n        ");
+        dom.appendChild(el5, el6);
+        dom.appendChild(el4, el5);
+        var el5 = dom.createTextNode("\n        ");
+        dom.appendChild(el4, el5);
+        var el5 = dom.createElement("div");
+        dom.setAttribute(el5, "class", "card-action");
+        var el6 = dom.createTextNode("\n          ");
+        dom.appendChild(el5, el6);
+        var el6 = dom.createComment("");
+        dom.appendChild(el5, el6);
+        var el6 = dom.createTextNode("\n          ");
+        dom.appendChild(el5, el6);
+        var el6 = dom.createComment("");
+        dom.appendChild(el5, el6);
+        var el6 = dom.createTextNode("\n        ");
+        dom.appendChild(el5, el6);
+        dom.appendChild(el4, el5);
+        var el5 = dom.createTextNode("\n      ");
+        dom.appendChild(el4, el5);
+        dom.appendChild(el3, el4);
+        var el4 = dom.createTextNode("\n    ");
+        dom.appendChild(el3, el4);
+        dom.appendChild(el2, el3);
+        var el3 = dom.createTextNode("\n  ");
+        dom.appendChild(el2, el3);
+        dom.appendChild(el1, el2);
+        var el2 = dom.createTextNode("\n");
+        dom.appendChild(el1, el2);
+        dom.appendChild(el0, el1);
+        var el1 = dom.createTextNode("\n");
+        dom.appendChild(el0, el1);
+        return el0;
+      },
+      buildRenderNodes: function buildRenderNodes(dom, fragment, contextualElement) {
+        var element0 = dom.childAt(fragment, [0, 1, 1, 1, 3]);
+        var morphs = new Array(2);
+        morphs[0] = dom.createMorphAt(element0, 1, 1);
+        morphs[1] = dom.createMorphAt(element0, 3, 3);
+        return morphs;
+      },
+      statements: [["inline", "link-to", ["Register", "auth.register"], ["class", "btn-flat green white-text btn-large"], ["loc", [null, [16, 10], [16, 92]]]], ["inline", "link-to", ["Enter Chat", "app.index"], ["class", "btn-flat blue white-text btn-large right"], ["loc", [null, [17, 10], [17, 95]]]]],
+      locals: [],
+      templates: []
+    };
+  })());
+});
+define('peepchat/utils/user-validations', ['exports', 'ember-cp-validations'], function (exports, _emberCpValidations) {
+  var email = [(0, _emberCpValidations.validator)('presence', true), (0, _emberCpValidations.validator)('format', { type: 'email' })];
+
+  exports.email = email;
+  var password = [(0, _emberCpValidations.validator)('presence', true), (0, _emberCpValidations.validator)('length', {
+    min: 4,
+    max: 24
+  })];
+
+  exports.password = password;
+  var passwordConfirmation = [(0, _emberCpValidations.validator)('presence', true), (0, _emberCpValidations.validator)('confirmation', {
+    on: 'model.password',
+    message: '{description} do not match',
+    description: 'Passwords'
+  })];
+
+  exports.passwordConfirmation = passwordConfirmation;
+  exports['default'] = {
+    email: email, password: password, passwordConfirmation: passwordConfirmation
+  };
+});
 define('peepchat/validators/belongs-to', ['exports', 'ember-cp-validations/validators/belongs-to'], function (exports, _emberCpValidationsValidatorsBelongsTo) {
   Object.defineProperty(exports, 'default', {
     enumerable: true,
@@ -1067,7 +1453,7 @@ define('peepchat/validators/presence', ['exports', 'ember-cp-validations/validat
 /* jshint ignore:start */
 
 define('peepchat/config/environment', ['ember'], function(Ember) {
-  return { 'default': {"modulePrefix":"peepchat","environment":"development","baseURL":"/","locationType":"auto","EmberENV":{"FEATURES":{}},"APP":{"name":"peepchat","version":"0.0.0+e5d929d2","autoboot":false},"exportApplicationGlobal":true}};
+  return { 'default': {"modulePrefix":"peepchat","environment":"development","baseURL":"/","locationType":"auto","EmberENV":{"FEATURES":{}},"APP":{"name":"peepchat","version":"0.0.0+74dac924","autoboot":false},"DS":{"host":"http://localhost:4000","namespace":"api"},"exportApplicationGlobal":true}};
 });
 
 /* jshint ignore:end */
