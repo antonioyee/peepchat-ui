@@ -53,7 +53,7 @@ module.exports = function(environment) {
   }
 
   if (environment === 'production') {
-    ENV.DS.host = 'https://agile-springs-48591.herokuapp.com/';
+    ENV.DS.host = 'https://agile-springs-48591.herokuapp.com';
   }
 
   return ENV;
