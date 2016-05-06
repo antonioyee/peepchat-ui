@@ -3,7 +3,7 @@ import config from '../config/environment';
 import fetch from 'ember-network/fetch';
 
 export default Ember.Route.extend({
-  session: Ember.indect.service(),
+  session: Ember.inject.service(),
   beforeModel() {
     if ( ! this.get('session').get('isAuthenticated') ) {
       this.transitionTo('auth.login');
