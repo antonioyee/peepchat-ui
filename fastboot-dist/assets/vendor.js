@@ -73636,6 +73636,430 @@ Picker.extend( 'pickadate', DatePicker )
       }
     }; // Plugin end
 }( jQuery ));
+;(function (global) {
+  define('ember-network/fetch', [ 'ember', 'exports' ], function(Ember, self) {
+    'use strict';
+
+    var Promise = Ember['default'].RSVP.Promise;
+    if (global.FormData) {
+      self.FormData = global.FormData;
+    }
+    if (global.FileReader) {
+      self.FileReader = global.FileReader;
+    }
+    if (global.Blob) {
+      self.Blob = global.Blob;
+    }
+
+    (function(self) {
+  'use strict';
+
+  if (self.fetch) {
+    return
+  }
+
+  function normalizeName(name) {
+    if (typeof name !== 'string') {
+      name = String(name)
+    }
+    if (/[^a-z0-9\-#$%&'*+.\^_`|~]/i.test(name)) {
+      throw new TypeError('Invalid character in header field name')
+    }
+    return name.toLowerCase()
+  }
+
+  function normalizeValue(value) {
+    if (typeof value !== 'string') {
+      value = String(value)
+    }
+    return value
+  }
+
+  function Headers(headers) {
+    this.map = {}
+
+    if (headers instanceof Headers) {
+      headers.forEach(function(value, name) {
+        this.append(name, value)
+      }, this)
+
+    } else if (headers) {
+      Object.getOwnPropertyNames(headers).forEach(function(name) {
+        this.append(name, headers[name])
+      }, this)
+    }
+  }
+
+  Headers.prototype.append = function(name, value) {
+    name = normalizeName(name)
+    value = normalizeValue(value)
+    var list = this.map[name]
+    if (!list) {
+      list = []
+      this.map[name] = list
+    }
+    list.push(value)
+  }
+
+  Headers.prototype['delete'] = function(name) {
+    delete this.map[normalizeName(name)]
+  }
+
+  Headers.prototype.get = function(name) {
+    var values = this.map[normalizeName(name)]
+    return values ? values[0] : null
+  }
+
+  Headers.prototype.getAll = function(name) {
+    return this.map[normalizeName(name)] || []
+  }
+
+  Headers.prototype.has = function(name) {
+    return this.map.hasOwnProperty(normalizeName(name))
+  }
+
+  Headers.prototype.set = function(name, value) {
+    this.map[normalizeName(name)] = [normalizeValue(value)]
+  }
+
+  Headers.prototype.forEach = function(callback, thisArg) {
+    Object.getOwnPropertyNames(this.map).forEach(function(name) {
+      this.map[name].forEach(function(value) {
+        callback.call(thisArg, value, name, this)
+      }, this)
+    }, this)
+  }
+
+  function consumed(body) {
+    if (body.bodyUsed) {
+      return Promise.reject(new TypeError('Already read'))
+    }
+    body.bodyUsed = true
+  }
+
+  function fileReaderReady(reader) {
+    return new Promise(function(resolve, reject) {
+      reader.onload = function() {
+        resolve(reader.result)
+      }
+      reader.onerror = function() {
+        reject(reader.error)
+      }
+    })
+  }
+
+  function readBlobAsArrayBuffer(blob) {
+    var reader = new FileReader()
+    reader.readAsArrayBuffer(blob)
+    return fileReaderReady(reader)
+  }
+
+  function readBlobAsText(blob) {
+    var reader = new FileReader()
+    reader.readAsText(blob)
+    return fileReaderReady(reader)
+  }
+
+  var support = {
+    blob: 'FileReader' in self && 'Blob' in self && (function() {
+      try {
+        new Blob()
+        return true
+      } catch(e) {
+        return false
+      }
+    })(),
+    formData: 'FormData' in self,
+    arrayBuffer: 'ArrayBuffer' in self
+  }
+
+  function Body() {
+    this.bodyUsed = false
+
+
+    this._initBody = function(body) {
+      this._bodyInit = body
+      if (typeof body === 'string') {
+        this._bodyText = body
+      } else if (support.blob && Blob.prototype.isPrototypeOf(body)) {
+        this._bodyBlob = body
+      } else if (support.formData && FormData.prototype.isPrototypeOf(body)) {
+        this._bodyFormData = body
+      } else if (!body) {
+        this._bodyText = ''
+      } else if (support.arrayBuffer && ArrayBuffer.prototype.isPrototypeOf(body)) {
+        // Only support ArrayBuffers for POST method.
+        // Receiving ArrayBuffers happens via Blobs, instead.
+      } else {
+        throw new Error('unsupported BodyInit type')
+      }
+
+      if (!this.headers.get('content-type')) {
+        if (typeof body === 'string') {
+          this.headers.set('content-type', 'text/plain;charset=UTF-8')
+        } else if (this._bodyBlob && this._bodyBlob.type) {
+          this.headers.set('content-type', this._bodyBlob.type)
+        }
+      }
+    }
+
+    if (support.blob) {
+      this.blob = function() {
+        var rejected = consumed(this)
+        if (rejected) {
+          return rejected
+        }
+
+        if (this._bodyBlob) {
+          return Promise.resolve(this._bodyBlob)
+        } else if (this._bodyFormData) {
+          throw new Error('could not read FormData body as blob')
+        } else {
+          return Promise.resolve(new Blob([this._bodyText]))
+        }
+      }
+
+      this.arrayBuffer = function() {
+        return this.blob().then(readBlobAsArrayBuffer)
+      }
+
+      this.text = function() {
+        var rejected = consumed(this)
+        if (rejected) {
+          return rejected
+        }
+
+        if (this._bodyBlob) {
+          return readBlobAsText(this._bodyBlob)
+        } else if (this._bodyFormData) {
+          throw new Error('could not read FormData body as text')
+        } else {
+          return Promise.resolve(this._bodyText)
+        }
+      }
+    } else {
+      this.text = function() {
+        var rejected = consumed(this)
+        return rejected ? rejected : Promise.resolve(this._bodyText)
+      }
+    }
+
+    if (support.formData) {
+      this.formData = function() {
+        return this.text().then(decode)
+      }
+    }
+
+    this.json = function() {
+      return this.text().then(JSON.parse)
+    }
+
+    return this
+  }
+
+  // HTTP methods whose capitalization should be normalized
+  var methods = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'POST', 'PUT']
+
+  function normalizeMethod(method) {
+    var upcased = method.toUpperCase()
+    return (methods.indexOf(upcased) > -1) ? upcased : method
+  }
+
+  function Request(input, options) {
+    options = options || {}
+    var body = options.body
+    if (Request.prototype.isPrototypeOf(input)) {
+      if (input.bodyUsed) {
+        throw new TypeError('Already read')
+      }
+      this.url = input.url
+      this.credentials = input.credentials
+      if (!options.headers) {
+        this.headers = new Headers(input.headers)
+      }
+      this.method = input.method
+      this.mode = input.mode
+      if (!body) {
+        body = input._bodyInit
+        input.bodyUsed = true
+      }
+    } else {
+      this.url = input
+    }
+
+    this.credentials = options.credentials || this.credentials || 'omit'
+    if (options.headers || !this.headers) {
+      this.headers = new Headers(options.headers)
+    }
+    this.method = normalizeMethod(options.method || this.method || 'GET')
+    this.mode = options.mode || this.mode || null
+    this.referrer = null
+
+    if ((this.method === 'GET' || this.method === 'HEAD') && body) {
+      throw new TypeError('Body not allowed for GET or HEAD requests')
+    }
+    this._initBody(body)
+  }
+
+  Request.prototype.clone = function() {
+    return new Request(this)
+  }
+
+  function decode(body) {
+    var form = new FormData()
+    body.trim().split('&').forEach(function(bytes) {
+      if (bytes) {
+        var split = bytes.split('=')
+        var name = split.shift().replace(/\+/g, ' ')
+        var value = split.join('=').replace(/\+/g, ' ')
+        form.append(decodeURIComponent(name), decodeURIComponent(value))
+      }
+    })
+    return form
+  }
+
+  function headers(xhr) {
+    var head = new Headers()
+    var pairs = (xhr.getAllResponseHeaders() || '').trim().split('\n')
+    pairs.forEach(function(header) {
+      var split = header.trim().split(':')
+      var key = split.shift().trim()
+      var value = split.join(':').trim()
+      head.append(key, value)
+    })
+    return head
+  }
+
+  Body.call(Request.prototype)
+
+  function Response(bodyInit, options) {
+    if (!options) {
+      options = {}
+    }
+
+    this.type = 'default'
+    this.status = options.status
+    this.ok = this.status >= 200 && this.status < 300
+    this.statusText = options.statusText
+    this.headers = options.headers instanceof Headers ? options.headers : new Headers(options.headers)
+    this.url = options.url || ''
+    this._initBody(bodyInit)
+  }
+
+  Body.call(Response.prototype)
+
+  Response.prototype.clone = function() {
+    return new Response(this._bodyInit, {
+      status: this.status,
+      statusText: this.statusText,
+      headers: new Headers(this.headers),
+      url: this.url
+    })
+  }
+
+  Response.error = function() {
+    var response = new Response(null, {status: 0, statusText: ''})
+    response.type = 'error'
+    return response
+  }
+
+  var redirectStatuses = [301, 302, 303, 307, 308]
+
+  Response.redirect = function(url, status) {
+    if (redirectStatuses.indexOf(status) === -1) {
+      throw new RangeError('Invalid status code')
+    }
+
+    return new Response(null, {status: status, headers: {location: url}})
+  }
+
+  self.Headers = Headers
+  self.Request = Request
+  self.Response = Response
+
+  self.fetch = function(input, init) {
+    return new Promise(function(resolve, reject) {
+      var request
+      if (Request.prototype.isPrototypeOf(input) && !init) {
+        request = input
+      } else {
+        request = new Request(input, init)
+      }
+
+      var xhr = new XMLHttpRequest()
+
+      function responseURL() {
+        if ('responseURL' in xhr) {
+          return xhr.responseURL
+        }
+
+        // Avoid security warnings on getResponseHeader when not allowed by CORS
+        if (/^X-Request-URL:/m.test(xhr.getAllResponseHeaders())) {
+          return xhr.getResponseHeader('X-Request-URL')
+        }
+
+        return
+      }
+
+      xhr.onload = function() {
+        var status = (xhr.status === 1223) ? 204 : xhr.status
+        if (status < 100 || status > 599) {
+          reject(new TypeError('Network request failed'))
+          return
+        }
+        var options = {
+          status: status,
+          statusText: xhr.statusText,
+          headers: headers(xhr),
+          url: responseURL()
+        }
+        var body = 'response' in xhr ? xhr.response : xhr.responseText
+        resolve(new Response(body, options))
+      }
+
+      xhr.onerror = function() {
+        reject(new TypeError('Network request failed'))
+      }
+
+      xhr.ontimeout = function() {
+        reject(new TypeError('Network request failed'))
+      }
+
+      xhr.open(request.method, request.url, true)
+
+      if (request.credentials === 'include') {
+        xhr.withCredentials = true
+      }
+
+      if ('responseType' in xhr && support.blob) {
+        xhr.responseType = 'blob'
+      }
+
+      request.headers.forEach(function(value, name) {
+        xhr.setRequestHeader(name, value)
+      })
+
+      xhr.send(typeof request._bodyInit === 'undefined' ? null : request._bodyInit)
+    })
+  }
+  self.fetch.polyfill = true
+})(typeof self !== 'undefined' ? self : this);
+
+
+    self['default'] = self.fetch;
+  });
+
+  define('fetch/ajax', [ 'fetch', 'exports' ], function(fetch, exports) {
+    'use strict';
+
+    exports['default'] = function() {
+      return fetch['default'].apply(fetch, arguments).then(function(request) {
+        return request.json();
+      });
+    };
+  });
+}(typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : this));
+
 ;/* globals define */
 
 function createDeprecatedModule(moduleId) {
@@ -74301,6 +74725,623 @@ define("ember-cli-app-version/templates/app-version", ["exports"], function (exp
       templates: []
     };
   })());
+});
+define('ember-cli-flash/components/flash-message', ['exports', 'ember', 'ember-cli-flash/templates/components/flash-message', 'ember-new-computed'], function (exports, _ember, _emberCliFlashTemplatesComponentsFlashMessage, _emberNewComputed) {
+  'use strict';
+
+  var _Ember$String = _ember['default'].String;
+  var classify = _Ember$String.classify;
+  var htmlSafe = _Ember$String.htmlSafe;
+  var Component = _ember['default'].Component;
+  var getWithDefault = _ember['default'].getWithDefault;
+  var run = _ember['default'].run;
+  var on = _ember['default'].on;
+  var _get = _ember['default'].get;
+  var set = _ember['default'].set;
+  var readOnly = _emberNewComputed['default'].readOnly;
+  var bool = _emberNewComputed['default'].bool;
+  var next = run.next;
+  var cancel = run.cancel;
+
+  exports['default'] = Component.extend({
+    layout: _emberCliFlashTemplatesComponentsFlashMessage['default'],
+    active: false,
+    messageStyle: 'bootstrap',
+    classNameBindings: ['alertType', 'active', 'exiting'],
+
+    showProgressBar: readOnly('flash.showProgress'),
+    exiting: readOnly('flash.exiting'),
+    hasBlock: bool('template').readOnly(),
+
+    alertType: (0, _emberNewComputed['default'])('flash.type', {
+      get: function get() {
+        var flashType = getWithDefault(this, 'flash.type', '');
+        var messageStyle = getWithDefault(this, 'messageStyle', '');
+        var prefix = 'alert alert-';
+
+        if (messageStyle === 'foundation') {
+          prefix = 'alert-box ';
+        }
+
+        return '' + prefix + flashType;
+      }
+    }),
+
+    flashType: (0, _emberNewComputed['default'])('flash.type', {
+      get: function get() {
+        var flashType = getWithDefault(this, 'flash.type', '');
+
+        return classify(flashType);
+      }
+    }),
+
+    _setActive: on('didInsertElement', function () {
+      var _this = this;
+
+      var pendingSet = next(this, function () {
+        set(_this, 'active', true);
+      });
+      set(this, 'pendingSet', pendingSet);
+    }),
+
+    progressDuration: (0, _emberNewComputed['default'])('flash.showProgress', {
+      get: function get() {
+        if (!_get(this, 'flash.showProgress')) {
+          return false;
+        }
+
+        var duration = getWithDefault(this, 'flash.timeout', 0);
+
+        return htmlSafe('transition-duration: ' + duration + 'ms');
+      }
+    }),
+
+    click: function click() {
+      this._destroyFlashMessage();
+    },
+
+    willDestroy: function willDestroy() {
+      this._super();
+      this._destroyFlashMessage();
+      cancel(_get(this, 'pendingSet'));
+    },
+
+    // private
+    _destroyFlashMessage: function _destroyFlashMessage() {
+      var flash = getWithDefault(this, 'flash', false);
+
+      if (flash) {
+        flash.destroyMessage();
+      }
+    }
+  });
+});
+define('ember-cli-flash/flash/object', ['exports', 'ember', 'ember-cli-flash/utils/computed', 'ember-new-computed'], function (exports, _ember, _emberCliFlashUtilsComputed, _emberNewComputed) {
+  'use strict';
+
+  var EmberObject = _ember['default'].Object;
+  var _Ember$run = _ember['default'].run;
+  var later = _Ember$run.later;
+  var cancel = _Ember$run.cancel;
+  var Evented = _ember['default'].Evented;
+  var get = _ember['default'].get;
+  var set = _ember['default'].set;
+  var readOnly = _emberNewComputed['default'].readOnly;
+
+  exports['default'] = EmberObject.extend(Evented, {
+    timer: null,
+    exitTimer: null,
+    exiting: false,
+
+    queue: readOnly('flashService.queue'),
+    totalTimeout: _emberCliFlashUtilsComputed['default'].add('timeout', 'extendedTimeout').readOnly(),
+    _guid: _emberCliFlashUtilsComputed['default'].guidFor('message').readOnly(),
+
+    init: function init() {
+      this._super.apply(this, arguments);
+
+      if (get(this, 'sticky')) {
+        return;
+      }
+
+      this._setTimer('exitTimer', 'exitMessage', get(this, 'timeout'));
+      this._setTimer('timer', 'destroyMessage', get(this, 'totalTimeout'));
+    },
+
+    destroyMessage: function destroyMessage() {
+      var queue = get(this, 'queue');
+
+      if (queue) {
+        queue.removeObject(this);
+      }
+
+      this.destroy();
+      this.trigger('didDestroyMessage');
+    },
+
+    exitMessage: function exitMessage() {
+      set(this, 'exiting', true);
+
+      this._cancelTimer('exitTimer');
+      this.trigger('didExitMessage');
+    },
+
+    willDestroy: function willDestroy() {
+      var _this = this;
+
+      var timers = ['timer', 'exitTimer'];
+
+      timers.forEach(function (timer) {
+        _this._cancelTimer(timer);
+      });
+
+      this._super.apply(this, arguments);
+    },
+
+    // private
+    _setTimer: function _setTimer(name, methodName, timeout) {
+      return set(this, name, later(this, methodName, timeout));
+    },
+
+    _cancelTimer: function _cancelTimer(name) {
+      var timer = get(this, name);
+
+      if (timer) {
+        cancel(timer);
+        set(this, name, null);
+      }
+    }
+  });
+});
+define('ember-cli-flash/services/flash-messages', ['exports', 'ember', 'ember-cli-flash/flash/object', 'ember-cli-flash/utils/object-without', 'ember-new-computed'], function (exports, _ember, _emberCliFlashFlashObject, _emberCliFlashUtilsObjectWithout, _emberNewComputed) {
+  'use strict';
+
+  var Service = _ember['default'].Service;
+  var assert = _ember['default'].assert;
+  var copy = _ember['default'].copy;
+  var getWithDefault = _ember['default'].getWithDefault;
+  var isNone = _ember['default'].isNone;
+  var setProperties = _ember['default'].setProperties;
+  var typeOf = _ember['default'].typeOf;
+  var warn = _ember['default'].warn;
+  var get = _ember['default'].get;
+  var set = _ember['default'].set;
+  var classify = _ember['default'].String.classify;
+  var emberArray = _ember['default'].A;
+  var equal = _emberNewComputed['default'].equal;
+  var sort = _emberNewComputed['default'].sort;
+  var mapBy = _emberNewComputed['default'].mapBy;
+
+  var merge = _ember['default'].assign || _ember['default'].merge;
+
+  exports['default'] = Service.extend({
+    isEmpty: equal('queue.length', 0).readOnly(),
+    _guids: mapBy('queue', '_guid').readOnly(),
+
+    arrangedQueue: sort('queue', function (a, b) {
+      if (a.priority < b.priority) {
+        return 1;
+      } else if (a.priority > b.priority) {
+        return -1;
+      }
+      return 0;
+    }).readOnly(),
+
+    init: function init() {
+      this._super.apply(this, arguments);
+      this._setDefaults();
+      this.queue = emberArray();
+    },
+
+    add: function add() {
+      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+
+      this._enqueue(this._newFlashMessage(options));
+
+      return this;
+    },
+
+    clearMessages: function clearMessages() {
+      var flashes = get(this, 'queue');
+
+      if (isNone(flashes)) {
+        return;
+      }
+
+      flashes.clear();
+
+      return this;
+    },
+
+    registerTypes: function registerTypes() {
+      var _this = this;
+
+      var types = arguments.length <= 0 || arguments[0] === undefined ? emberArray() : arguments[0];
+
+      types.forEach(function (type) {
+        return _this._registerType(type);
+      });
+
+      return this;
+    },
+
+    _newFlashMessage: function _newFlashMessage() {
+      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+
+      assert('The flash message cannot be empty.', options.message);
+
+      var flashService = this;
+      var allDefaults = getWithDefault(this, 'flashMessageDefaults', {});
+      var defaults = (0, _emberCliFlashUtilsObjectWithout['default'])(allDefaults, ['types', 'injectionFactories', 'preventDuplicates']);
+
+      var flashMessageOptions = merge(copy(defaults), { flashService: flashService });
+
+      for (var key in options) {
+        var value = get(options, key);
+        var option = this._getOptionOrDefault(key, value);
+
+        set(flashMessageOptions, key, option);
+      }
+
+      return _emberCliFlashFlashObject['default'].create(flashMessageOptions);
+    },
+
+    _getOptionOrDefault: function _getOptionOrDefault(key, value) {
+      var defaults = getWithDefault(this, 'flashMessageDefaults', {});
+      var defaultOption = get(defaults, key);
+
+      if (typeOf(value) === 'undefined') {
+        return defaultOption;
+      }
+
+      return value;
+    },
+
+    _setDefaults: function _setDefaults() {
+      var defaults = getWithDefault(this, 'flashMessageDefaults', {});
+
+      for (var key in defaults) {
+        var classifiedKey = classify(key);
+        var defaultKey = 'default' + classifiedKey;
+
+        set(this, defaultKey, defaults[key]);
+      }
+
+      this.registerTypes(getWithDefault(this, 'defaultTypes', emberArray()));
+    },
+
+    _registerType: function _registerType(type) {
+      var _this2 = this;
+
+      assert('The flash type cannot be undefined', type);
+
+      this[type] = function (message) {
+        var options = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+
+        var flashMessageOptions = copy(options);
+        setProperties(flashMessageOptions, { message: message, type: type });
+
+        return _this2.add(flashMessageOptions);
+      };
+    },
+
+    _hasDuplicate: function _hasDuplicate(guid) {
+      return get(this, '_guids').contains(guid);
+    },
+
+    _enqueue: function _enqueue(flashInstance) {
+      var preventDuplicates = get(this, 'defaultPreventDuplicates');
+      var guid = get(flashInstance, '_guid');
+
+      if (preventDuplicates && this._hasDuplicate(guid)) {
+        warn('Attempting to add a duplicate message to the Flash Messages Service', false, {
+          id: 'ember-cli-flash.duplicate-message'
+        });
+        return;
+      }
+
+      return get(this, 'queue').pushObject(flashInstance);
+    }
+  });
+});
+define("ember-cli-flash/templates/components/flash-message", ["exports"], function (exports) {
+  "use strict";
+
+  exports["default"] = Ember.HTMLBars.template((function () {
+    var child0 = (function () {
+      return {
+        meta: {
+          "fragmentReason": {
+            "name": "missing-wrapper",
+            "problems": ["wrong-type"]
+          },
+          "revision": "Ember@2.5.1",
+          "loc": {
+            "source": null,
+            "start": {
+              "line": 1,
+              "column": 0
+            },
+            "end": {
+              "line": 3,
+              "column": 0
+            }
+          },
+          "moduleName": "modules/ember-cli-flash/templates/components/flash-message.hbs"
+        },
+        isEmpty: false,
+        arity: 0,
+        cachedFragment: null,
+        hasRendered: false,
+        buildFragment: function buildFragment(dom) {
+          var el0 = dom.createDocumentFragment();
+          var el1 = dom.createTextNode("  ");
+          dom.appendChild(el0, el1);
+          var el1 = dom.createComment("");
+          dom.appendChild(el0, el1);
+          var el1 = dom.createTextNode("\n");
+          dom.appendChild(el0, el1);
+          return el0;
+        },
+        buildRenderNodes: function buildRenderNodes(dom, fragment, contextualElement) {
+          var morphs = new Array(1);
+          morphs[0] = dom.createMorphAt(fragment, 1, 1, contextualElement);
+          return morphs;
+        },
+        statements: [["inline", "yield", [["get", "this", ["loc", [null, [2, 10], [2, 14]]]], ["get", "flash", ["loc", [null, [2, 15], [2, 20]]]]], [], ["loc", [null, [2, 2], [2, 22]]]]],
+        locals: [],
+        templates: []
+      };
+    })();
+    var child1 = (function () {
+      var child0 = (function () {
+        return {
+          meta: {
+            "fragmentReason": false,
+            "revision": "Ember@2.5.1",
+            "loc": {
+              "source": null,
+              "start": {
+                "line": 5,
+                "column": 2
+              },
+              "end": {
+                "line": 9,
+                "column": 2
+              }
+            },
+            "moduleName": "modules/ember-cli-flash/templates/components/flash-message.hbs"
+          },
+          isEmpty: false,
+          arity: 0,
+          cachedFragment: null,
+          hasRendered: false,
+          buildFragment: function buildFragment(dom) {
+            var el0 = dom.createDocumentFragment();
+            var el1 = dom.createTextNode("    ");
+            dom.appendChild(el0, el1);
+            var el1 = dom.createElement("div");
+            dom.setAttribute(el1, "class", "alert-progress");
+            var el2 = dom.createTextNode("\n      ");
+            dom.appendChild(el1, el2);
+            var el2 = dom.createElement("div");
+            dom.setAttribute(el2, "class", "alert-progressBar");
+            dom.appendChild(el1, el2);
+            var el2 = dom.createTextNode("\n    ");
+            dom.appendChild(el1, el2);
+            dom.appendChild(el0, el1);
+            var el1 = dom.createTextNode("\n");
+            dom.appendChild(el0, el1);
+            return el0;
+          },
+          buildRenderNodes: function buildRenderNodes(dom, fragment, contextualElement) {
+            var element0 = dom.childAt(fragment, [1, 1]);
+            var morphs = new Array(1);
+            morphs[0] = dom.createAttrMorph(element0, 'style');
+            return morphs;
+          },
+          statements: [["attribute", "style", ["get", "progressDuration", ["loc", [null, [7, 45], [7, 61]]]]]],
+          locals: [],
+          templates: []
+        };
+      })();
+      return {
+        meta: {
+          "fragmentReason": false,
+          "revision": "Ember@2.5.1",
+          "loc": {
+            "source": null,
+            "start": {
+              "line": 3,
+              "column": 0
+            },
+            "end": {
+              "line": 10,
+              "column": 0
+            }
+          },
+          "moduleName": "modules/ember-cli-flash/templates/components/flash-message.hbs"
+        },
+        isEmpty: false,
+        arity: 0,
+        cachedFragment: null,
+        hasRendered: false,
+        buildFragment: function buildFragment(dom) {
+          var el0 = dom.createDocumentFragment();
+          var el1 = dom.createTextNode("  ");
+          dom.appendChild(el0, el1);
+          var el1 = dom.createComment("");
+          dom.appendChild(el0, el1);
+          var el1 = dom.createTextNode("\n");
+          dom.appendChild(el0, el1);
+          var el1 = dom.createComment("");
+          dom.appendChild(el0, el1);
+          return el0;
+        },
+        buildRenderNodes: function buildRenderNodes(dom, fragment, contextualElement) {
+          var morphs = new Array(2);
+          morphs[0] = dom.createMorphAt(fragment, 1, 1, contextualElement);
+          morphs[1] = dom.createMorphAt(fragment, 3, 3, contextualElement);
+          dom.insertBoundary(fragment, null);
+          return morphs;
+        },
+        statements: [["content", "flash.message", ["loc", [null, [4, 2], [4, 19]]]], ["block", "if", [["get", "showProgressBar", ["loc", [null, [5, 8], [5, 23]]]]], [], 0, null, ["loc", [null, [5, 2], [9, 9]]]]],
+        locals: [],
+        templates: [child0]
+      };
+    })();
+    return {
+      meta: {
+        "fragmentReason": {
+          "name": "missing-wrapper",
+          "problems": ["wrong-type"]
+        },
+        "revision": "Ember@2.5.1",
+        "loc": {
+          "source": null,
+          "start": {
+            "line": 1,
+            "column": 0
+          },
+          "end": {
+            "line": 11,
+            "column": 0
+          }
+        },
+        "moduleName": "modules/ember-cli-flash/templates/components/flash-message.hbs"
+      },
+      isEmpty: false,
+      arity: 0,
+      cachedFragment: null,
+      hasRendered: false,
+      buildFragment: function buildFragment(dom) {
+        var el0 = dom.createDocumentFragment();
+        var el1 = dom.createComment("");
+        dom.appendChild(el0, el1);
+        return el0;
+      },
+      buildRenderNodes: function buildRenderNodes(dom, fragment, contextualElement) {
+        var morphs = new Array(1);
+        morphs[0] = dom.createMorphAt(fragment, 0, 0, contextualElement);
+        dom.insertBoundary(fragment, 0);
+        dom.insertBoundary(fragment, null);
+        return morphs;
+      },
+      statements: [["block", "if", [["get", "hasBlock", ["loc", [null, [1, 6], [1, 14]]]]], [], 0, 1, ["loc", [null, [1, 0], [10, 7]]]]],
+      locals: [],
+      templates: [child0, child1]
+    };
+  })());
+});
+define('ember-cli-flash/utils/computed', ['exports', 'ember', 'ember-new-computed'], function (exports, _ember, _emberNewComputed) {
+  'use strict';
+
+  exports.add = add;
+  exports.guidFor = guidFor;
+
+  var typeOf = _ember['default'].typeOf;
+  var _get = _ember['default'].get;
+  var emberGuidFor = _ember['default'].guidFor;
+  var emberArray = _ember['default'].A;
+
+  function add() {
+    for (var _len = arguments.length, dependentKeys = Array(_len), _key = 0; _key < _len; _key++) {
+      dependentKeys[_key] = arguments[_key];
+    }
+
+    var computedFunc = (0, _emberNewComputed['default'])({
+      get: function get() {
+        var _this = this;
+
+        var values = dependentKeys.map(function (dependentKey) {
+          var value = _get(_this, dependentKey);
+
+          if (typeOf(value) !== 'number') {
+            return;
+          }
+
+          return value;
+        });
+
+        return emberArray(values).compact().reduce(function (prev, curr) {
+          return prev + curr;
+        });
+      }
+    });
+
+    return computedFunc.property.apply(computedFunc, dependentKeys);
+  }
+
+  function guidFor(dependentKey) {
+    return (0, _emberNewComputed['default'])(dependentKey, {
+      get: function get() {
+        var value = _get(this, dependentKey);
+
+        return emberGuidFor(value.toString());
+      }
+    });
+  }
+});
+define('ember-cli-flash/utils/object-compact', ['exports', 'ember'], function (exports, _ember) {
+  'use strict';
+
+  exports['default'] = objectCompact;
+
+  var isPresent = _ember['default'].isPresent;
+
+  function objectCompact(objectInstance) {
+    var compactedObject = {};
+
+    for (var key in objectInstance) {
+      var value = objectInstance[key];
+
+      if (isPresent(value)) {
+        compactedObject[key] = value;
+      }
+    }
+
+    return compactedObject;
+  }
+});
+define("ember-cli-flash/utils/object-only", ["exports"], function (exports) {
+  "use strict";
+
+  exports["default"] = objectWithout;
+
+  function objectWithout() {
+    var originalObj = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+    var keysToRemain = arguments.length <= 1 || arguments[1] === undefined ? [] : arguments[1];
+
+    var newObj = {};
+
+    for (var key in originalObj) {
+      if (keysToRemain.indexOf(key) !== -1) {
+        newObj[key] = originalObj[key];
+      }
+    }
+
+    return newObj;
+  }
+});
+define("ember-cli-flash/utils/object-without", ["exports"], function (exports) {
+  "use strict";
+
+  exports["default"] = objectWithout;
+
+  function objectWithout() {
+    var originalObj = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
+    var keysToRemove = arguments.length <= 1 || arguments[1] === undefined ? [] : arguments[1];
+
+    var newObj = {};
+
+    for (var key in originalObj) {
+      if (keysToRemove.indexOf(key) === -1) {
+        newObj[key] = originalObj[key];
+      }
+    }
+
+    return newObj;
+  }
 });
 define('ember-cookies/services/cookies', ['exports', 'ember', 'ember-getowner-polyfill', 'lodash/object', 'lodash/collection'], function (exports, _ember, _emberGetownerPolyfill, _lodashObject, _lodashCollection) {
   'use strict';
@@ -94090,6 +95131,69 @@ define('ember-load-initializers/index', ['exports', 'ember'], function (exports,
       }
     });
   };
+});
+define('ember-new-computed/index', ['exports', 'ember', 'ember-new-computed/utils/can-use-new-syntax'], function (exports, _ember, _emberNewComputedUtilsCanUseNewSyntax) {
+  'use strict';
+
+  exports['default'] = newComputed;
+
+  var computed = _ember['default'].computed;
+
+  function newComputed() {
+    var polyfillArguments = [];
+    var config = arguments[arguments.length - 1];
+
+    if (typeof config === 'function' || _emberNewComputedUtilsCanUseNewSyntax['default']) {
+      return computed.apply(undefined, arguments);
+    }
+
+    for (var i = 0, l = arguments.length - 1; i < l; i++) {
+      polyfillArguments.push(arguments[i]);
+    }
+
+    var func;
+    if (config.set) {
+      func = function (key, value) {
+        if (arguments.length > 1) {
+          return config.set.call(this, key, value);
+        } else {
+          return config.get.call(this, key);
+        }
+      };
+    } else {
+      func = function (key) {
+        return config.get.call(this, key);
+      };
+    }
+
+    polyfillArguments.push(func);
+
+    return computed.apply(undefined, polyfillArguments);
+  }
+
+  var getKeys = Object.keys || _ember['default'].keys;
+  var computedKeys = getKeys(computed);
+
+  for (var i = 0, l = computedKeys.length; i < l; i++) {
+    newComputed[computedKeys[i]] = computed[computedKeys[i]];
+  }
+});
+define('ember-new-computed/utils/can-use-new-syntax', ['exports', 'ember'], function (exports, _ember) {
+  'use strict';
+
+  var supportsSetterGetter;
+
+  try {
+    _ember['default'].computed({
+      set: function set() {},
+      get: function get() {}
+    });
+    supportsSetterGetter = true;
+  } catch (e) {
+    supportsSetterGetter = false;
+  }
+
+  exports['default'] = supportsSetterGetter;
 });
 define('ember-resolver/container-debug-adapter', ['exports', 'ember', 'ember-resolver/utils/module-registry'], function (exports, _ember, _emberResolverUtilsModuleRegistry) {
   'use strict';
